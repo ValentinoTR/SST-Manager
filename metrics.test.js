@@ -570,3 +570,88 @@ test("availableYears junta los años con datos y siempre incluye el actual", () 
     assert.deepEqual(M.availableYears(state, TODAY), ["2024", "2025", "2026"]);
     assert.deepEqual(M.availableYears({ epp: [{ date: "2027-03-01" }] }, TODAY), ["2026", "2027"]);
 });
+
+
+/* ---------- IPERC, incidentes y ficha del trabajador ---------- */
+
+test("riskLevel clasifica Bajo / Medio / Alto según probabilidad x severidad", () => {
+    assert.equal(M.riskLevel(1, 1).key, "low");
+    assert.equal(M.riskLevel(1, 2).key, "low");
+    assert.equal(M.riskLevel(1, 3).key, "medium");   // 3 pts
+    assert.equal(M.riskLevel(2, 2).key, "medium");   // 4 pts
+    assert.equal(M.riskLevel(2, 3).key, "high");     // 6 pts
+    assert.equal(M.riskLevel(3, 3).key, "high");     // 9 pts
+    assert.equal(M.riskLevel(3, 3).label, "Alto");
+    assert.equal(M.riskLevel("2", "3").score, 6);    // los formularios entregan texto
+    assert.equal(M.riskLevel(undefined, 2).key, "none");
+});
+
+test("ipercStats cuenta los riesgos por nivel", () => {
+    const state = {
+        iperc: [
+            { probability: 1, severity: 1 },
+            { probability: 2, severity: 2 },
+            { probability: 3, severity: 3 },
+            { probability: 3, severity: 2 }
+        ]
+    };
+    assert.deepEqual(M.ipercStats(state), { low: 1, medium: 1, high: 2, total: 4 });
+    assert.deepEqual(M.ipercStats({}), { low: 0, medium: 0, high: 0, total: 0 });
+});
+
+test("attendanceSummary ignora los descansos y cuenta tardanzas como asistidas", () => {
+    const summary = M.attendanceSummary([
+        { status: "Asistencia" },
+        { status: "Tardanza" },
+        { status: "Inasistencia" },
+        { status: "Descanso" }
+    ]);
+    assert.deepEqual(summary, { days: 3, attendance: 1, absences: 1, late: 1, pct: 67 });
+    assert.equal(M.attendanceSummary([]).pct, null);
+});
+
+test("workerProfile reúne solo los registros del trabajador y sus alertas", () => {
+    const state = {
+        workers: [
+            { id: "a", name: "Ana" },
+            { id: "b", name: "Beto" }
+        ],
+        epp: [
+            { id: "1", workerId: "a", date: "2026-01-01", renewal: "2026-09-01" },
+            { id: "2", workerId: "a", date: "2026-03-01", renewal: "2027-03-01" },
+            { id: "3", workerId: "b", date: "2026-03-01", renewal: "2026-09-01" }
+        ],
+        insurance: [{ id: "4", workerId: "a", start: "2026-01-01", end: "2026-10-20" }],
+        training: [],
+        medical: [{ id: "5", workerId: "a", date: "2025-01-01", expiry: "2026-01-01" }],
+        attendance: [{ workerId: "a", date: "2026-10-01", status: "Asistencia" }],
+        incidents: [
+            { id: "6", workerId: "a", date: "2026-05-01", status: "Pendiente" },
+            { id: "7", workerId: "a", date: "2026-06-01", status: "Cerrado" },
+            { id: "8", workerId: "b", date: "2026-06-01", status: "Pendiente" }
+        ]
+    };
+
+    const profile = M.workerProfile(state, "a", TODAY);
+
+    assert.equal(profile.worker.name, "Ana");
+    assert.deepEqual(profile.epp.map(item => item.id), ["2", "1"]);   // más reciente primero
+    assert.equal(profile.incidents.length, 2);
+    assert.deepEqual(profile.alerts, { epp: 1, insurance: 1, medical: 1, incidents: 1 });
+    assert.equal(profile.attendanceSummary.pct, 100);
+    assert.equal(M.workerProfile(state, "zzz", TODAY), null);
+});
+
+test("pendingActions incluye incidentes abiertos y omite los cerrados", () => {
+    const state = {
+        incidents: [
+            { type: "Accidente", status: "Pendiente", description: "Caída", correctiveAction: "Cambiar escalera", area: "Taller", date: "2026-10-01" },
+            { type: "Incidente", status: "Cerrado", description: "Casi caída", area: "Taller", date: "2026-10-01" }
+        ]
+    };
+    const items = M.pendingActions(state, TODAY);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].source, "Accidente");
+    assert.equal(items[0].text, "Cambiar escalera");
+    assert.equal(items[0].daysOpen, 4);
+});

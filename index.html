@@ -142,6 +142,21 @@
                 Inspecciones
             </button>
 
+            <button class="nav-item" data-page="incidentes">
+                <span>🚨</span>
+                Incidentes
+            </button>
+
+            <button class="nav-item" data-page="iperc">
+                <span>☢</span>
+                IPERC
+            </button>
+
+            <button class="nav-item" data-page="reportes">
+                <span>📄</span>
+                Reportes
+            </button>
+
         </nav>
 
 
@@ -1640,6 +1655,201 @@
         </section>
 
 
+
+        <!-- ========================= -->
+        <!-- FICHA DEL COLABORADOR -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-ficha">
+
+            <article class="panel profile-card" id="profileHeader"></article>
+
+            <article class="panel">
+                <div class="tabs" id="profileTabs"></div>
+                <div class="profile-body" id="profileBody"></div>
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- INCIDENTES Y ACCIDENTES -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-incidentes">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3>Incidentes y accidentes laborales</h3>
+                        <p>Registra lo ocurrido, la acción correctiva y ciérralo cuando se levante.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-incident">
+                        + Registrar incidente / accidente
+                    </button>
+                </div>
+
+                <div class="board-stats" id="incidentsStats"></div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Trabajador</th>
+                            <th>Área</th>
+                            <th>Severidad</th>
+                            <th>Descripción</th>
+                            <th>Acción correctiva</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody id="incidentsTbody"></tbody>
+                    </table>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- IPERC -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-iperc">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3>IPERC · Matriz de riesgos</h3>
+                        <p>Peligro → Riesgo → Probabilidad × Severidad → Nivel → Medida de control.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-iperc">
+                        + Registrar riesgo
+                    </button>
+                </div>
+
+                <div class="board-stats" id="ipercStats"></div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Área</th>
+                            <th>Peligro</th>
+                            <th>Riesgo</th>
+                            <th class="center">Prob.</th>
+                            <th class="center">Sev.</th>
+                            <th>Nivel de riesgo</th>
+                            <th>Medida de control</th>
+                            <th>Responsable</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody id="ipercTbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="board-legend">
+                    <span>🟢 Bajo (1-2 pts) · 🟡 Medio (3-4 pts) · 🔴 Alto (6-9 pts) — puntos = probabilidad × severidad</span>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- REPORTES -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-reportes">
+
+            <article class="panel">
+
+                <div class="panel-header">
+                    <div>
+                        <h3>Reporte SST</h3>
+                        <p>Elige el tipo de reporte, genéralo y descárgalo como PDF o Excel.</p>
+                    </div>
+                </div>
+
+                <div class="report-builder">
+
+                    <div class="segmented" id="reportTypes">
+                        <button class="segment active" data-action="report-type" data-type="mensual">Mensual</button>
+                        <button class="segment" data-action="report-type" data-type="anual">Anual</button>
+                        <button class="segment" data-action="report-type" data-type="trabajador">Por trabajador</button>
+                        <button class="segment" data-action="report-type" data-type="area">Por área</button>
+                    </div>
+
+                    <div class="report-params">
+
+                        <div class="form-group" data-param="mensual">
+                            <label for="reportMonth">Mes</label>
+                            <input type="month" id="reportMonth">
+                        </div>
+
+                        <div class="form-group" data-param="anual" hidden>
+                            <label for="reportYear">Año</label>
+                            <select id="reportYear"></select>
+                        </div>
+
+                        <div class="form-group" data-param="trabajador" hidden>
+                            <label for="reportWorker">Trabajador</label>
+                            <select id="reportWorker"></select>
+                        </div>
+
+                        <div class="form-group" data-param="area" hidden>
+                            <label for="reportArea">Área</label>
+                            <select id="reportArea"></select>
+                        </div>
+
+                    </div>
+
+                    <button class="btn btn-primary btn-large" id="btnGenerateReport">
+                        Generar reporte SST
+                    </button>
+
+                </div>
+
+            </article>
+
+            <article class="panel" id="reportResult" hidden>
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3 id="reportTitle">Reporte</h3>
+                        <p>Vista previa. Descárgalo en el formato que necesites.</p>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn btn-light" id="btnReportPdf">
+                            📄 Descargar PDF
+                        </button>
+                        <button class="btn btn-primary" id="btnReportExcel">
+                            📊 Descargar Excel
+                        </button>
+                    </div>
+                </div>
+
+                <iframe
+                    class="report-preview"
+                    id="reportPreview"
+                    title="Vista previa del reporte"
+                ></iframe>
+
+            </article>
+
+        </section>
+
     </main>
 
 
@@ -1791,6 +2001,7 @@
 
 
 <script src="metrics.js"></script>
+<script src="reports.js"></script>
 <script src="app.js"></script>
 <script>
 (function () {

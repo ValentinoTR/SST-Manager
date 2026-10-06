@@ -132,6 +132,10 @@ const initialState = {
 
     inspections: [],
 
+    incidents: [],
+
+    iperc: [],
+
     hours: [],
 
     goals: {
@@ -293,6 +297,222 @@ function showToast(message) {
 
 
 /* =========================================================
+   ARCHIVOS ADJUNTOS
+   Los archivos (certificados, constancias, fotos) se guardan
+   en IndexedDB para no llenar el límite de localStorage; el
+   registro solo conserva nombre, tipo y tamaño.
+   ========================================================= */
+
+const FILES_DB_NAME = "sst_control_files";
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+let filesDbPromise = null;
+
+
+function filesDb() {
+
+    if (!filesDbPromise) {
+
+        filesDbPromise =
+            new Promise((resolve, reject) => {
+
+                const request =
+                    indexedDB.open(FILES_DB_NAME, 1);
+
+                request.onupgradeneeded = () => {
+                    request.result.createObjectStore("files");
+                };
+
+                request.onsuccess = () => resolve(request.result);
+
+                request.onerror = () => reject(request.error);
+
+            });
+
+        filesDbPromise.catch(() => {
+            filesDbPromise = null;
+        });
+
+    }
+
+    return filesDbPromise;
+
+}
+
+
+async function filesTransaction(mode, work) {
+
+    const db = await filesDb();
+
+    return new Promise((resolve, reject) => {
+
+        const tx = db.transaction("files", mode);
+
+        const request = work(tx.objectStore("files"));
+
+        tx.oncomplete = () => resolve(request ? request.result : undefined);
+
+        tx.onerror = () => reject(tx.error);
+
+        tx.onabort = () => reject(tx.error);
+
+    });
+
+}
+
+
+// Devuelve { id, name, type, size } o null si no hay archivo.
+async function storeAttachment(file) {
+
+    if (!(file instanceof File) || file.size === 0) {
+        return null;
+    }
+
+    if (file.size > MAX_FILE_BYTES) {
+
+        showToast("El archivo supera los 10 MB y no se adjuntó.");
+
+        return null;
+
+    }
+
+    try {
+
+        const id = createId();
+
+        await filesTransaction(
+            "readwrite",
+            store => store.put(file, id)
+        );
+
+        return {
+            id,
+            name: file.name,
+            type: file.type,
+            size: file.size
+        };
+
+    } catch (error) {
+
+        console.error("No se pudo guardar el archivo.", error);
+
+        showToast("No se pudo guardar el archivo adjunto.");
+
+        return null;
+
+    }
+
+}
+
+
+// Separa el archivo del resto de los datos del formulario.
+async function withAttachment(data) {
+
+    const { attachment: file, ...rest } = data;
+
+    const meta = await storeAttachment(file);
+
+    return meta ? { ...rest, attachment: meta } : rest;
+
+}
+
+
+async function dropAttachments(ids) {
+
+    const list = ids.filter(Boolean);
+
+    if (list.length === 0) {
+        return;
+    }
+
+    try {
+
+        await filesTransaction(
+            "readwrite",
+            store => {
+                list.forEach(id => store.delete(id));
+            }
+        );
+
+    } catch (error) {
+
+        console.error("No se pudieron borrar los archivos.", error);
+
+    }
+
+}
+
+
+async function openAttachment(id) {
+
+    try {
+
+        const blob =
+            await filesTransaction(
+                "readonly",
+                store => store.get(id)
+            );
+
+        if (!blob) {
+
+            showToast("El archivo ya no está disponible en este navegador.");
+
+            return;
+
+        }
+
+        const url = URL.createObjectURL(blob);
+
+        window.open(url, "_blank");
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+    } catch (error) {
+
+        console.error("No se pudo abrir el archivo.", error);
+
+        showToast("No se pudo abrir el archivo.");
+
+    }
+
+}
+
+
+function attachmentField(label) {
+
+    return {
+        name: "attachment",
+        label: `📎 ${label} (opcional)`,
+        type: "file",
+        accept: "image/*,.pdf",
+        full: true
+    };
+
+}
+
+
+function attachmentButton(record, label = "Archivo") {
+
+    if (!record.attachment) {
+        return "";
+    }
+
+    return `
+        <button
+            class="btn btn-light btn-small"
+            data-action="open-file"
+            data-file="${escapeHtml(record.attachment.id)}"
+            title="${escapeHtml(record.attachment.name)}"
+        >
+            📎 ${escapeHtml(label)}
+        </button>
+    `;
+
+}
+
+
+/* =========================================================
    ESTADOS Y VENCIMIENTOS
    ========================================================= */
 
@@ -414,6 +634,30 @@ const pageData = {
         title: "Inspecciones",
         subtitle:
             "Inspecciones realizadas y estado de sus observaciones."
+    },
+
+    incidentes: {
+        title: "Incidentes y accidentes",
+        subtitle:
+            "Registro, seguimiento y cierre de incidentes y accidentes laborales."
+    },
+
+    iperc: {
+        title: "IPERC",
+        subtitle:
+            "Identificación de peligros, evaluación de riesgos y medidas de control."
+    },
+
+    reportes: {
+        title: "Reportes",
+        subtitle:
+            "Genera el reporte SST y descárgalo en PDF o Excel."
+    },
+
+    ficha: {
+        title: "Ficha del colaborador",
+        subtitle:
+            "Datos del trabajador y todo su historial SST."
     }
 
 };
@@ -446,7 +690,11 @@ function openPage(pageName) {
 
             if (
                 button.dataset.page ===
-                pageName
+                (
+                    pageName === "ficha"
+                        ? "colaboradores"
+                        : pageName
+                )
             ) {
 
                 button.classList.add(
@@ -514,6 +762,9 @@ function openModal({
 
     modalSubmit.textContent =
         submitText;
+
+    modalSubmit.disabled =
+        false;
 
     modalFields.innerHTML = "";
 
@@ -621,8 +872,12 @@ function openModal({
             input.type =
                 field.type || "text";
 
-            input.value =
-                values[field.name] ?? "";
+            if (input.type !== "file") {
+
+                input.value =
+                    values[field.name] ?? "";
+
+            }
 
         }
 
@@ -656,6 +911,14 @@ function openModal({
 
             input.step =
                 field.step;
+
+        }
+
+
+        if (field.accept) {
+
+            input.accept =
+                field.accept;
 
         }
 
@@ -979,9 +1242,14 @@ function renderWorkers() {
                             </div>
 
                             <div>
-                                <strong>
+                                <button
+                                    class="worker-link"
+                                    data-action="view-worker"
+                                    data-id="${worker.id}"
+                                    title="Ver ficha completa"
+                                >
                                     ${escapeHtml(worker.name)}
-                                </strong>
+                                </button>
 
                                 <small>
                                     ${escapeHtml(worker.phone || "Sin teléfono")}
@@ -1025,6 +1293,14 @@ function renderWorkers() {
                     <td>
 
                         <div class="actions">
+
+                            <button
+                                class="btn btn-primary btn-small"
+                                data-action="view-worker"
+                                data-id="${worker.id}"
+                            >
+                                Ficha
+                            </button>
 
                             <button
                                 class="btn btn-light btn-small"
@@ -1355,7 +1631,7 @@ function renderAttendance() {
    EPP
    ========================================================= */
 
-function openEppModal() {
+function openEppModal(workerId = "") {
 
     if (
         workerOptions().length === 0
@@ -1376,6 +1652,7 @@ function openEppModal() {
             "Registrar entrega de EPP",
 
         values: {
+            workerId,
             date: today()
         },
 
@@ -1428,18 +1705,18 @@ function openEppModal() {
                 label: "Observaciones",
                 type: "textarea",
                 full: true
-            }
+            },
+
+            attachmentField("Constancia de entrega")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             state.epp.push({
-
                 id: createId(),
-
-                ...data
-
+                ...(await withAttachment(data))
             });
 
 
@@ -1549,13 +1826,25 @@ function renderEpp() {
 
                         <td>
 
-                            <button
-                                class="btn btn-danger btn-small"
-                                data-action="delete-epp"
-                                data-id="${record.id}"
-                            >
-                                Eliminar
-                            </button>
+                            <div class="actions">
+
+                                ${attachmentButton(record, "Constancia")}
+
+                                <button
+
+                                    class="btn btn-danger btn-small"
+
+                                    data-action="delete-epp"
+
+                                    data-id="${record.id}"
+
+                                >
+
+                                    Eliminar
+
+                                </button>
+
+                            </div>
 
                         </td>
 
@@ -1573,7 +1862,7 @@ function renderEpp() {
    SEGUROS
    ========================================================= */
 
-function openInsuranceModal() {
+function openInsuranceModal(workerId = "") {
 
     if (
         workerOptions().length === 0
@@ -1594,6 +1883,7 @@ function openInsuranceModal() {
             "Registrar seguro",
 
         values: {
+            workerId,
             start: today()
         },
 
@@ -1639,18 +1929,18 @@ function openInsuranceModal() {
                 label: "Fecha de vencimiento",
                 type: "date",
                 required: true
-            }
+            },
+
+            attachmentField("Póliza o constancia")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             state.insurance.push({
-
                 id: createId(),
-
-                ...data
-
+                ...(await withAttachment(data))
             });
 
 
@@ -1754,13 +2044,25 @@ function renderInsurance() {
 
                         <td>
 
-                            <button
-                                class="btn btn-danger btn-small"
-                                data-action="delete-insurance"
-                                data-id="${record.id}"
-                            >
-                                Eliminar
-                            </button>
+                            <div class="actions">
+
+                                ${attachmentButton(record, "Póliza")}
+
+                                <button
+
+                                    class="btn btn-danger btn-small"
+
+                                    data-action="delete-insurance"
+
+                                    data-id="${record.id}"
+
+                                >
+
+                                    Eliminar
+
+                                </button>
+
+                            </div>
 
                         </td>
 
@@ -1778,7 +2080,7 @@ function renderInsurance() {
    CAPACITACIONES
    ========================================================= */
 
-function openTrainingModal() {
+function openTrainingModal(workerId = "") {
 
     if (
         workerOptions().length === 0
@@ -1799,6 +2101,7 @@ function openTrainingModal() {
             "Registrar capacitación",
 
         values: {
+            workerId,
             date: today(),
             status: "Completada"
         },
@@ -1841,18 +2144,18 @@ function openTrainingModal() {
                     "Completada",
                     "Pendiente"
                 ]
-            }
+            },
+
+            attachmentField("Certificado")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             state.training.push({
-
                 id: createId(),
-
-                ...data
-
+                ...(await withAttachment(data))
             });
 
 
@@ -1968,13 +2271,25 @@ function renderTraining() {
 
                         <td>
 
-                            <button
-                                class="btn btn-danger btn-small"
-                                data-action="delete-training"
-                                data-id="${record.id}"
-                            >
-                                Eliminar
-                            </button>
+                            <div class="actions">
+
+                                ${attachmentButton(record, "Certificado")}
+
+                                <button
+
+                                    class="btn btn-danger btn-small"
+
+                                    data-action="delete-training"
+
+                                    data-id="${record.id}"
+
+                                >
+
+                                    Eliminar
+
+                                </button>
+
+                            </div>
 
                         </td>
 
@@ -1992,7 +2307,7 @@ function renderTraining() {
    EXÁMENES MÉDICOS
    ========================================================= */
 
-function openMedicalModal() {
+function openMedicalModal(workerId = "") {
 
     if (
         workerOptions().length === 0
@@ -2013,6 +2328,7 @@ function openMedicalModal() {
             "Registrar examen médico",
 
         values: {
+            workerId,
             date: today(),
             result: "Apto"
         },
@@ -2065,18 +2381,18 @@ function openMedicalModal() {
                 name: "expiry",
                 label: "Fecha de vencimiento",
                 type: "date"
-            }
+            },
+
+            attachmentField("Certificado del examen")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             state.medical.push({
-
                 id: createId(),
-
-                ...data
-
+                ...(await withAttachment(data))
             });
 
 
@@ -2219,13 +2535,25 @@ function renderMedical() {
 
                         <td>
 
-                            <button
-                                class="btn btn-danger btn-small"
-                                data-action="delete-medical"
-                                data-id="${record.id}"
-                            >
-                                Eliminar
-                            </button>
+                            <div class="actions">
+
+                                ${attachmentButton(record, "Certificado")}
+
+                                <button
+
+                                    class="btn btn-danger btn-small"
+
+                                    data-action="delete-medical"
+
+                                    data-id="${record.id}"
+
+                                >
+
+                                    Eliminar
+
+                                </button>
+
+                            </div>
 
                         </td>
 
@@ -3173,17 +3501,20 @@ function openFindingModal() {
                     "Abierto",
                     "Cerrado"
                 ]
-            }
+            },
+
+            attachmentField("Foto del hallazgo")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             state.findings.push({
 
                 id: createId(),
 
-                ...data,
+                ...(await withAttachment(data)),
 
                 closedDate:
                     data.status === "Cerrado"
@@ -3262,6 +3593,8 @@ function renderFindings() {
 
                     <td>
                         <div class="actions">
+
+                            ${attachmentButton(record, "Foto")}
 
                             <button
                                 class="btn ${closed ? "btn-warning" : "btn-light"} btn-small"
@@ -3413,11 +3746,14 @@ function openInspectionModal() {
                 full: true,
                 placeholder:
                     "Orden y limpieza en la oficina\nCables sueltos en el taller\nExtintor sin señalización"
-            }
+            },
+
+            attachmentField("Foto del hallazgo")
+
 
         ],
 
-        onSubmit(data) {
+        async onSubmit(data) {
 
             const observations =
                 SSTMetrics
@@ -3438,9 +3774,12 @@ function openInspectionModal() {
                 return;
             }
 
-            state.inspections.push({
+            const photo =
+                await withAttachment({ attachment: data.attachment });
 
+            state.inspections.push({
                 id: createId(),
+                ...photo,
 
                 date: data.date,
 
@@ -3563,8 +3902,12 @@ function renderInspections() {
                             </span>
                         </div>
 
+                        ${attachmentButton(inspection, "Foto")}
+
                         <button
+
                             class="btn btn-danger btn-small"
+
                             data-action="delete-inspection"
                             data-id="${inspection.id}"
                         >
@@ -4117,7 +4460,9 @@ const ACTION_BADGES = {
     "HPH":             "badge-red",
     "HPI":             "badge-yellow",
     "Mejora continua": "badge-blue",
-    "Inspección":      "badge-gray"
+    "Inspección":      "badge-gray",
+    "Incidente":       "badge-yellow",
+    "Accidente":       "badge-red"
 };
 
 
@@ -4210,6 +4555,1103 @@ function renderBoard() {
 
 
 /* =========================================================
+   FICHA DEL COLABORADOR
+   ========================================================= */
+
+let profileWorkerId = null;
+
+let profileTab = "epp";
+
+
+const PROFILE_TABS = [
+    { key: "epp",            label: "EPP" },
+    { key: "seguros",        label: "Seguros" },
+    { key: "capacitaciones", label: "Capacitaciones" },
+    { key: "emo",            label: "EMO" },
+    { key: "asistencia",     label: "Asistencia" },
+    { key: "incidentes",     label: "Incidentes" }
+];
+
+
+function openProfile(workerId, tab = "epp") {
+
+    if (!getWorker(workerId)) {
+        return;
+    }
+
+    profileWorkerId = workerId;
+
+    profileTab = tab;
+
+    renderProfile();
+
+    openPage("ficha");
+
+}
+
+
+function profileTable(columns, rows, emptyText) {
+
+    if (rows.length === 0) {
+        return emptyBoard(emptyText);
+    }
+
+    return `
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        ${columns.map(column => `<th>${column}</th>`).join("")}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(row => `
+                        <tr>
+                            ${row.map(cell => `<td>${cell}</td>`).join("")}
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+}
+
+
+function statusBadge(status) {
+
+    return `
+        <span class="badge ${status.className}">
+            ${status.text}
+        </span>
+    `;
+
+}
+
+
+function profileTabContent(profile) {
+
+    const addButton = (kind, label) =>
+        profile.worker.status === "Activo"
+            ? `
+                <button
+                    class="btn btn-primary btn-small"
+                    data-action="profile-add"
+                    data-kind="${kind}"
+                >
+                    + ${label}
+                </button>
+            `
+            : "";
+
+    const toolbar = (kind, label, hint) => `
+        <div class="profile-toolbar">
+            <span>${hint}</span>
+            ${addButton(kind, label)}
+        </div>
+    `;
+
+    if (profileTab === "epp") {
+
+        return toolbar("epp", "Registrar EPP", `${profile.epp.length} entrega(s) de EPP`) +
+            profileTable(
+                ["Equipo", "Cantidad", "Talla", "Entrega", "Renovación", "Estado", "Constancia"],
+                profile.epp.map(item => [
+                    `<strong>${escapeHtml(item.item)}</strong>`,
+                    escapeHtml(item.quantity),
+                    escapeHtml(item.size || "—"),
+                    formatDate(item.date),
+                    formatDate(item.renewal),
+                    statusBadge(expirationState(item.renewal)),
+                    attachmentButton(item, "Constancia") || "—"
+                ]),
+                "Este colaborador aún no tiene EPP entregado."
+            );
+    }
+
+    if (profileTab === "seguros") {
+
+        return toolbar("insurance", "Registrar seguro", `${profile.insurance.length} seguro(s)`) +
+            profileTable(
+                ["Seguro", "Aseguradora", "Póliza", "Inicio", "Vencimiento", "Estado", "Archivo"],
+                profile.insurance.map(item => [
+                    `<strong>${escapeHtml(item.type)}</strong>`,
+                    escapeHtml(item.provider),
+                    escapeHtml(item.policy || "—"),
+                    formatDate(item.start),
+                    formatDate(item.end),
+                    statusBadge(expirationState(item.end)),
+                    attachmentButton(item, "Póliza") || "—"
+                ]),
+                "Este colaborador aún no tiene seguros registrados."
+            );
+    }
+
+    if (profileTab === "capacitaciones") {
+
+        return toolbar("training", "Registrar capacitación", `${profile.training.length} capacitación(es)`) +
+            profileTable(
+                ["Capacitación", "Fecha", "Entidad / instructor", "Estado", "Certificado"],
+                profile.training.map(item => [
+                    `<strong>${escapeHtml(item.topic)}</strong>`,
+                    formatDate(item.date),
+                    escapeHtml(item.provider || "—"),
+                    escapeHtml(item.status),
+                    attachmentButton(item, "Certificado") || "—"
+                ]),
+                "Este colaborador aún no tiene capacitaciones registradas."
+            );
+    }
+
+    if (profileTab === "emo") {
+
+        return toolbar("medical", "Registrar examen", `${profile.medical.length} examen(es) médico(s)`) +
+            profileTable(
+                ["Tipo", "Fecha", "Resultado", "Vencimiento", "Estado", "Certificado"],
+                profile.medical.map(item => [
+                    `<strong>${escapeHtml(item.type)}</strong>`,
+                    formatDate(item.date),
+                    escapeHtml(item.result),
+                    formatDate(item.expiry),
+                    statusBadge(expirationState(item.expiry)),
+                    attachmentButton(item, "Certificado") || "—"
+                ]),
+                "Este colaborador aún no tiene exámenes médicos registrados."
+            );
+    }
+
+    if (profileTab === "asistencia") {
+
+        const summary = profile.attendanceSummary;
+
+        return `
+            <div class="board-stats">
+                ${statBox(summary.days, "Días registrados")}
+                ${statBox(summary.attendance, "Asistencias", "good")}
+                ${statBox(summary.absences, "Inasistencias", summary.absences ? "warn" : "")}
+                ${statBox(summary.late, "Tardanzas")}
+                ${statBox(summary.pct === null ? "—" : summary.pct + "%", "Asistencia")}
+            </div>
+        ` + toolbar("attendance", "Registrar asistencia", `${profile.attendance.length} registro(s)`) +
+            profileTable(
+                ["Fecha", "Estado", "Observación"],
+                profile.attendance.map(item => [
+                    formatDate(item.date),
+                    escapeHtml(item.status),
+                    escapeHtml(item.note || "—")
+                ]),
+                "Este colaborador aún no tiene asistencia registrada."
+            );
+    }
+
+    return toolbar("incident", "Registrar incidente", `${profile.incidents.length} incidente(s) o accidente(s)`) +
+        profileTable(
+            ["Fecha", "Tipo", "Severidad", "Descripción", "Estado", "Evidencia"],
+            profile.incidents.map(item => [
+                formatDate(item.date),
+                `<span class="badge ${INCIDENT_BADGES[item.type] || "badge-gray"}">${escapeHtml(item.type)}</span>`,
+                `<span class="badge ${SEVERITY_BADGES[item.severity] || "badge-gray"}">${escapeHtml(item.severity)}</span>`,
+                escapeHtml(item.description),
+                `<span class="badge ${item.status === "Cerrado" ? "badge-green" : "badge-yellow"}">${escapeHtml(item.status)}</span>`,
+                attachmentButton(item, "Foto") || "—"
+            ]),
+            "Este colaborador no tiene incidentes ni accidentes registrados."
+        );
+
+}
+
+
+function renderProfile() {
+
+    const header = document.getElementById("profileHeader");
+    const tabs = document.getElementById("profileTabs");
+    const body = document.getElementById("profileBody");
+
+    const profile =
+        profileWorkerId
+            ? SSTMetrics.workerProfile(state, profileWorkerId, today())
+            : null;
+
+    if (!profile) {
+
+        header.innerHTML =
+            emptyBoard("Elige un colaborador en la lista para ver su ficha.");
+
+        tabs.innerHTML = "";
+
+        body.innerHTML = "";
+
+        return;
+
+    }
+
+    const worker = profile.worker;
+
+    const chips = [
+        profile.alerts.epp
+            ? `<span class="badge badge-yellow">⛑ ${profile.alerts.epp} EPP por renovar o vencido</span>`
+            : "",
+        profile.alerts.insurance
+            ? `<span class="badge badge-yellow">🛡 ${profile.alerts.insurance} seguro(s) por vencer o vencido(s)</span>`
+            : "",
+        profile.alerts.medical
+            ? `<span class="badge badge-yellow">❤ ${profile.alerts.medical} examen(es) por vencer o vencido(s)</span>`
+            : "",
+        profile.alerts.incidents
+            ? `<span class="badge badge-red">🚨 ${profile.alerts.incidents} incidente(s) pendiente(s)</span>`
+            : ""
+    ].filter(Boolean);
+
+    header.innerHTML = `
+
+        <div class="profile-head">
+
+            <div class="avatar profile-avatar">
+                ${initials(worker.name)}
+            </div>
+
+            <div class="profile-id">
+                <h3>${escapeHtml(worker.name)}</h3>
+                <span class="badge ${worker.status === "Activo" ? "badge-green" : "badge-gray"}">
+                    ${escapeHtml(worker.status)}
+                </span>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-light" data-action="back-workers">
+                    ← Colaboradores
+                </button>
+                <button
+                    class="btn btn-primary"
+                    data-action="edit-worker"
+                    data-id="${worker.id}"
+                >
+                    Editar datos
+                </button>
+            </div>
+
+        </div>
+
+        <dl class="profile-data">
+            <div><dt>DNI</dt><dd>${escapeHtml(worker.dni)}</dd></div>
+            <div><dt>Cargo</dt><dd>${escapeHtml(worker.role)}</dd></div>
+            <div><dt>Área</dt><dd>${escapeHtml(worker.area)}</dd></div>
+            <div><dt>Fecha de ingreso</dt><dd>${formatDate(worker.joined)}</dd></div>
+            <div><dt>Teléfono</dt><dd>${escapeHtml(worker.phone || "—")}</dd></div>
+        </dl>
+
+        <div class="profile-chips">
+            ${chips.length
+                ? chips.join("")
+                : '<span class="badge badge-green">✓ Sin alertas pendientes</span>'}
+        </div>
+
+    `;
+
+    const counts = {
+        epp: profile.epp.length,
+        seguros: profile.insurance.length,
+        capacitaciones: profile.training.length,
+        emo: profile.medical.length,
+        asistencia: profile.attendance.length,
+        incidentes: profile.incidents.length
+    };
+
+    tabs.innerHTML =
+        PROFILE_TABS.map(tab => `
+            <button
+                class="tab${tab.key === profileTab ? " active" : ""}"
+                data-action="profile-tab"
+                data-tab="${tab.key}"
+            >
+                ${tab.label}
+                <span class="tab-count">${counts[tab.key]}</span>
+            </button>
+        `).join("");
+
+    body.innerHTML = profileTabContent(profile);
+
+}
+
+
+function addFromProfile(kind) {
+
+    const id = profileWorkerId;
+
+    if (!id) {
+        return;
+    }
+
+    ({
+        epp: () => openEppModal(id),
+        insurance: () => openInsuranceModal(id),
+        training: () => openTrainingModal(id),
+        medical: () => openMedicalModal(id),
+        attendance: () => openAttendanceModal(id),
+        incident: () => openIncidentModal(null, id)
+    })[kind]?.();
+
+}
+
+
+/* =========================================================
+   INCIDENTES Y ACCIDENTES
+   ========================================================= */
+
+const INCIDENT_BADGES = {
+    Incidente: "badge-yellow",
+    Accidente: "badge-red"
+};
+
+
+const SEVERITY_BADGES = {
+    Leve:     "badge-green",
+    Moderado: "badge-yellow",
+    Grave:    "badge-red",
+    Fatal:    "badge-red"
+};
+
+
+function openIncidentModal(incidentId = null, workerId = "") {
+
+    const incident =
+        incidentId
+            ? state.incidents.find(item => item.id === incidentId)
+            : null;
+
+    openModal({
+
+        title:
+            incident
+                ? "Editar incidente / accidente"
+                : "Registrar incidente / accidente",
+
+        submitText:
+            incident
+                ? "Guardar cambios"
+                : "Registrar",
+
+        values:
+            incident || {
+                type: "Incidente",
+                date: today(),
+                workerId,
+                severity: "Leve",
+                status: "Pendiente"
+            },
+
+        fields: [
+
+            {
+                name: "type",
+                label: "Tipo",
+                type: "select",
+                required: true,
+                options: SSTMetrics.INCIDENT_TYPES
+            },
+
+            {
+                name: "date",
+                label: "Fecha",
+                type: "date",
+                required: true
+            },
+
+            {
+                name: "workerId",
+                label: "Trabajador involucrado",
+                type: "select",
+                options: [
+                    { value: "", label: "— Ninguno / no aplica —" },
+                    ...workerOptions()
+                ]
+            },
+
+            {
+                name: "area",
+                label: "Área",
+                required: true,
+                placeholder: "Ej. Almacén, taller..."
+            },
+
+            {
+                name: "severity",
+                label: "Severidad",
+                type: "select",
+                required: true,
+                options: SSTMetrics.INCIDENT_SEVERITIES
+            },
+
+            {
+                name: "status",
+                label: "Estado",
+                type: "select",
+                options: ["Pendiente", "Cerrado"]
+            },
+
+            {
+                name: "description",
+                label: "Descripción",
+                type: "textarea",
+                required: true,
+                full: true,
+                placeholder: "Qué ocurrió, cómo y dónde..."
+            },
+
+            {
+                name: "correctiveAction",
+                label: "Acción correctiva",
+                type: "textarea",
+                full: true,
+                placeholder: "Qué se hará para que no se repita..."
+            },
+
+            {
+                name: "responsible",
+                label: "Responsable de la acción",
+                full: true
+            },
+
+            attachmentField("Foto / evidencia")
+
+        ],
+
+        async onSubmit(data) {
+
+            modalSubmit.disabled = true;
+
+            const { attachment: file, ...rest } = data;
+
+            const meta = await storeAttachment(file);
+
+            const closedDate =
+                rest.status === "Cerrado"
+                    ? (incident?.closedDate || today())
+                    : "";
+
+            if (incident) {
+
+                if (meta) {
+
+                    dropAttachments([incident.attachment?.id]);
+
+                    incident.attachment = meta;
+
+                }
+
+                Object.assign(incident, rest, { closedDate });
+
+            } else {
+
+                state.incidents.push({
+                    id: createId(),
+                    ...rest,
+                    closedDate,
+                    ...(meta ? { attachment: meta } : {})
+                });
+
+            }
+
+            saveState();
+
+            closeModal();
+
+            showToast(
+                incident
+                    ? "Registro actualizado."
+                    : "Incidente registrado."
+            );
+
+        }
+
+    });
+
+}
+
+
+function renderIncidents() {
+
+    const tbody = document.getElementById("incidentsTbody");
+
+    const stats = document.getElementById("incidentsStats");
+
+    const records =
+        [...state.incidents].sort(
+            (a, b) => b.date.localeCompare(a.date)
+        );
+
+    const count = test => records.filter(test).length;
+
+    stats.innerHTML = `
+        ${statBox(records.length, "Registrados")}
+        ${statBox(count(item => item.type === "Accidente"), "Accidentes", count(item => item.type === "Accidente") ? "warn" : "")}
+        ${statBox(count(item => item.type === "Incidente"), "Incidentes")}
+        ${statBox(count(item => item.status !== "Cerrado"), "Pendientes", count(item => item.status !== "Cerrado") ? "warn" : "good")}
+    `;
+
+    if (records.length === 0) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9">
+                    Aún no hay incidentes ni accidentes registrados.
+                </td>
+            </tr>
+        `;
+
+        return;
+
+    }
+
+    tbody.innerHTML =
+        records.map(record => {
+
+            const closed = record.status === "Cerrado";
+
+            return `
+
+                <tr>
+
+                    <td>${formatDate(record.date)}</td>
+
+                    <td>
+                        <span class="badge ${INCIDENT_BADGES[record.type] || "badge-gray"}">
+                            ${escapeHtml(record.type)}
+                        </span>
+                    </td>
+
+                    <td>
+                        ${record.workerId
+                            ? `<button class="worker-link" data-action="view-worker" data-id="${record.workerId}">
+                                    ${escapeHtml(workerName(record.workerId))}
+                               </button>`
+                            : "—"}
+                    </td>
+
+                    <td>${escapeHtml(record.area)}</td>
+
+                    <td>
+                        <span class="badge ${SEVERITY_BADGES[record.severity] || "badge-gray"}">
+                            ${escapeHtml(record.severity)}
+                        </span>
+                    </td>
+
+                    <td>${escapeHtml(record.description)}</td>
+
+                    <td>
+                        ${escapeHtml(record.correctiveAction || "—")}
+                        ${record.responsible
+                            ? `<small class="cell-sub">Resp.: ${escapeHtml(record.responsible)}</small>`
+                            : ""}
+                    </td>
+
+                    <td>
+                        <span class="badge ${closed ? "badge-green" : "badge-yellow"}">
+                            ${escapeHtml(record.status)}
+                        </span>
+                        ${closed
+                            ? `<small class="cell-sub">${formatDate(record.closedDate)}</small>`
+                            : ""}
+                    </td>
+
+                    <td>
+                        <div class="actions">
+
+                            ${attachmentButton(record, "Foto")}
+
+                            <button
+                                class="btn btn-light btn-small"
+                                data-action="edit-incident"
+                                data-id="${record.id}"
+                            >
+                                Editar
+                            </button>
+
+                            <button
+                                class="btn ${closed ? "btn-warning" : "btn-light"} btn-small"
+                                data-action="toggle-incident"
+                                data-id="${record.id}"
+                            >
+                                ${closed ? "Reabrir" : "Cerrar"}
+                            </button>
+
+                            <button
+                                class="btn btn-danger btn-small"
+                                data-action="delete-incident"
+                                data-id="${record.id}"
+                            >
+                                Eliminar
+                            </button>
+
+                        </div>
+                    </td>
+
+                </tr>
+
+            `;
+
+        }).join("");
+
+}
+
+
+/* =========================================================
+   IPERC · MATRIZ DE RIESGOS
+   ========================================================= */
+
+function openIpercModal(ipercId = null) {
+
+    const risk =
+        ipercId
+            ? state.iperc.find(item => item.id === ipercId)
+            : null;
+
+    openModal({
+
+        title:
+            risk
+                ? "Editar riesgo"
+                : "Registrar peligro / riesgo",
+
+        submitText:
+            risk
+                ? "Guardar cambios"
+                : "Registrar",
+
+        values:
+            risk || {
+                probability: 2,
+                severity: 2
+            },
+
+        fields: [
+
+            {
+                name: "area",
+                label: "Área / proceso",
+                required: true,
+                full: true,
+                placeholder: "Ej. Taller de mantenimiento"
+            },
+
+            {
+                name: "hazard",
+                label: "Peligro",
+                required: true,
+                placeholder: "Ej. Piso resbaloso"
+            },
+
+            {
+                name: "risk",
+                label: "Riesgo",
+                required: true,
+                placeholder: "Ej. Caída al mismo nivel"
+            },
+
+            {
+                name: "probability",
+                label: "Probabilidad",
+                type: "select",
+                required: true,
+                options: SSTMetrics.RISK_PROBABILITY
+            },
+
+            {
+                name: "severity",
+                label: "Severidad",
+                type: "select",
+                required: true,
+                options: SSTMetrics.RISK_SEVERITY
+            },
+
+            {
+                name: "control",
+                label: "Medida de control",
+                type: "textarea",
+                required: true,
+                full: true,
+                placeholder: "Qué se hace o se hará para controlar el riesgo..."
+            },
+
+            {
+                name: "responsible",
+                label: "Responsable",
+                full: true
+            }
+
+        ],
+
+        onSubmit(data) {
+
+            const values = {
+                ...data,
+                probability: Number(data.probability),
+                severity: Number(data.severity)
+            };
+
+            if (risk) {
+
+                Object.assign(risk, values);
+
+            } else {
+
+                state.iperc.push({
+                    id: createId(),
+                    ...values
+                });
+
+            }
+
+            saveState();
+
+            closeModal();
+
+            showToast(
+                risk
+                    ? "Riesgo actualizado."
+                    : "Riesgo registrado."
+            );
+
+        }
+
+    });
+
+}
+
+
+function renderIperc() {
+
+    const tbody = document.getElementById("ipercTbody");
+
+    const stats = document.getElementById("ipercStats");
+
+    const summary = SSTMetrics.ipercStats(state);
+
+    stats.innerHTML = `
+        ${statBox(summary.total, "Riesgos evaluados")}
+        ${statBox("🟢 " + summary.low, "Bajo", "good")}
+        ${statBox("🟡 " + summary.medium, "Medio")}
+        ${statBox("🔴 " + summary.high, "Alto", summary.high ? "warn" : "")}
+    `;
+
+    const records =
+        state.iperc
+            .map(item => ({
+                item,
+                level: SSTMetrics.riskLevel(item.probability, item.severity)
+            }))
+            .sort((a, b) =>
+                b.level.score - a.level.score ||
+                String(a.item.area).localeCompare(String(b.item.area), "es")
+            );
+
+    if (records.length === 0) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9">
+                    Aún no hay riesgos registrados en la matriz IPERC.
+                </td>
+            </tr>
+        `;
+
+        return;
+
+    }
+
+    tbody.innerHTML =
+        records.map(({ item, level }) => `
+
+            <tr>
+
+                <td>${escapeHtml(item.area)}</td>
+
+                <td><strong>${escapeHtml(item.hazard)}</strong></td>
+
+                <td>${escapeHtml(item.risk)}</td>
+
+                <td class="center">${escapeHtml(item.probability)}</td>
+
+                <td class="center">${escapeHtml(item.severity)}</td>
+
+                <td>
+                    <span class="badge badge-risk ${level.className}">
+                        ${level.icon} ${level.label}
+                    </span>
+                    <small class="cell-sub">${level.score} pts</small>
+                </td>
+
+                <td>${escapeHtml(item.control)}</td>
+
+                <td>${escapeHtml(item.responsible || "—")}</td>
+
+                <td>
+                    <div class="actions">
+
+                        <button
+                            class="btn btn-light btn-small"
+                            data-action="edit-iperc"
+                            data-id="${item.id}"
+                        >
+                            Editar
+                        </button>
+
+                        <button
+                            class="btn btn-danger btn-small"
+                            data-action="delete-iperc"
+                            data-id="${item.id}"
+                        >
+                            Eliminar
+                        </button>
+
+                    </div>
+                </td>
+
+            </tr>
+
+        `).join("");
+
+}
+
+
+/* =========================================================
+   REPORTES SST
+   ========================================================= */
+
+let reportType = "mensual";
+
+let currentReport = null;
+
+
+function distinctAreas() {
+
+    const seen = new Map();
+
+    [
+        ...state.workers,
+        ...state.incidents,
+        ...state.findings,
+        ...state.inspections,
+        ...state.iperc
+    ].forEach(item => {
+
+        const area = String(item.area || "").trim();
+
+        const key = SSTMetrics.normalize(area);
+
+        if (area && !seen.has(key)) {
+            seen.set(key, area);
+        }
+
+    });
+
+    return [...seen.values()].sort((a, b) => a.localeCompare(b, "es"));
+
+}
+
+
+function fillSelect(id, options) {
+
+    const select = document.getElementById(id);
+
+    const previous = select.value;
+
+    select.innerHTML =
+        options
+            .map(option => `
+                <option value="${escapeHtml(option.value)}">
+                    ${escapeHtml(option.label)}
+                </option>
+            `)
+            .join("");
+
+    if (options.some(option => option.value === previous)) {
+        select.value = previous;
+    }
+
+}
+
+
+function renderReportControls() {
+
+    fillSelect(
+        "reportYear",
+        SSTMetrics.availableYears(state, today())
+            .map(year => ({ value: year, label: year }))
+    );
+
+    if (!document.getElementById("reportYear").value) {
+        document.getElementById("reportYear").value = today().slice(0, 4);
+    }
+
+    fillSelect(
+        "reportWorker",
+        [...state.workers]
+            .sort((a, b) => a.name.localeCompare(b.name, "es"))
+            .map(worker => ({
+                value: worker.id,
+                label: `${worker.name} - ${worker.area}`
+            }))
+    );
+
+    fillSelect(
+        "reportArea",
+        distinctAreas().map(area => ({ value: area, label: area }))
+    );
+
+    document
+        .querySelectorAll("#reportTypes .segment")
+        .forEach(button => {
+
+            button.classList.toggle(
+                "active",
+                button.dataset.type === reportType
+            );
+
+        });
+
+    document
+        .querySelectorAll("[data-param]")
+        .forEach(group => {
+
+            group.hidden = group.dataset.param !== reportType;
+
+        });
+
+}
+
+
+function generateReport() {
+
+    const options = {
+        type: reportType,
+        month: document.getElementById("reportMonth").value,
+        year: document.getElementById("reportYear").value,
+        workerId: document.getElementById("reportWorker").value,
+        area: document.getElementById("reportArea").value
+    };
+
+    if (reportType === "mensual" && !options.month) {
+
+        showToast("Elige el mes del reporte.");
+
+        return;
+
+    }
+
+    if (reportType === "trabajador" && !options.workerId) {
+
+        showToast("Primero registra un colaborador.");
+
+        return;
+
+    }
+
+    if (reportType === "area" && !options.area) {
+
+        showToast("Aún no hay áreas registradas.");
+
+        return;
+
+    }
+
+    currentReport =
+        SSTReports.buildReport(state, options, today());
+
+    document.getElementById("reportTitle").textContent =
+        currentReport.scopeLabel;
+
+    document.getElementById("reportPreview").srcdoc =
+        SSTReports.toHtml(currentReport);
+
+    document.getElementById("reportResult").hidden = false;
+
+    document
+        .getElementById("reportResult")
+        .scrollIntoView({ behavior: "smooth", block: "start" });
+
+}
+
+
+function downloadFile(blob, name) {
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.download = name;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+}
+
+
+function exportReportPdf() {
+
+    if (!currentReport) {
+        return;
+    }
+
+    const frame = document.getElementById("reportPreview");
+
+    frame.contentWindow.focus();
+
+    frame.contentWindow.print();
+
+}
+
+
+function exportReportExcel() {
+
+    if (!currentReport) {
+        return;
+    }
+
+    downloadFile(
+        new Blob(
+            [SSTReports.toXlsx(currentReport)],
+            {
+                type:
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+        ),
+        SSTReports.fileName(currentReport, "xlsx")
+    );
+
+    showToast("Archivo Excel generado.");
+
+}
+
+
+document
+    .getElementById("reportMonth")
+    .value = currentMonth();
+
+
+document
+    .getElementById("btnGenerateReport")
+    .addEventListener("click", generateReport);
+
+
+document
+    .getElementById("btnReportPdf")
+    .addEventListener("click", exportReportPdf);
+
+
+document
+    .getElementById("btnReportExcel")
+    .addEventListener("click", exportReportExcel);
+
+
+/* =========================================================
    ELIMINAR REGISTROS
    ========================================================= */
 
@@ -4218,6 +5660,14 @@ function removeRecord(
     id,
     message
 ) {
+
+    const removed =
+        state[collection].find(
+            item =>
+                item.id === id
+        );
+
+    dropAttachments([removed?.attachment?.id]);
 
     state[collection] =
         state[collection].filter(
@@ -4345,6 +5795,25 @@ document.addEventListener(
 
                 if (!confirmed) {
                     return;
+                }
+
+
+                dropAttachments(
+                    ["epp", "insurance", "training", "medical"]
+                        .flatMap(collection =>
+                            state[collection]
+                                .filter(item => item.workerId === id)
+                                .map(item => item.attachment?.id)
+                        )
+                );
+
+
+                if (profileWorkerId === id) {
+
+                    profileWorkerId = null;
+
+                    openPage("colaboradores");
+
                 }
 
 
@@ -4529,6 +5998,146 @@ document.addEventListener(
             }
 
 
+            case "view-worker":
+
+                openProfile(id);
+
+                break;
+
+
+            case "back-workers":
+
+                openPage("colaboradores");
+
+                break;
+
+
+            case "profile-tab":
+
+                profileTab = button.dataset.tab;
+
+                renderProfile();
+
+                break;
+
+
+            case "profile-add":
+
+                addFromProfile(button.dataset.kind);
+
+                break;
+
+
+            case "open-file":
+
+                openAttachment(button.dataset.file);
+
+                break;
+
+
+            case "new-incident":
+
+                openIncidentModal();
+
+                break;
+
+
+            case "edit-incident":
+
+                openIncidentModal(id);
+
+                break;
+
+
+            case "toggle-incident": {
+
+                const incident =
+                    state.incidents.find(
+                        item => item.id === id
+                    );
+
+                if (!incident) {
+                    return;
+                }
+
+                const closing =
+                    incident.status !== "Cerrado";
+
+                incident.status =
+                    closing ? "Cerrado" : "Pendiente";
+
+                incident.closedDate =
+                    closing ? today() : "";
+
+                saveState();
+
+                showToast(
+                    closing
+                        ? "Registro cerrado."
+                        : "Registro reabierto."
+                );
+
+                break;
+            }
+
+
+            case "delete-incident":
+
+                if (
+                    confirm("¿Eliminar este registro de incidente/accidente?")
+                ) {
+
+                    removeRecord(
+                        "incidents",
+                        id,
+                        "Registro eliminado."
+                    );
+
+                }
+
+                break;
+
+
+            case "new-iperc":
+
+                openIpercModal();
+
+                break;
+
+
+            case "edit-iperc":
+
+                openIpercModal(id);
+
+                break;
+
+
+            case "delete-iperc":
+
+                if (
+                    confirm("¿Eliminar este riesgo de la matriz IPERC?")
+                ) {
+
+                    removeRecord(
+                        "iperc",
+                        id,
+                        "Riesgo eliminado."
+                    );
+
+                }
+
+                break;
+
+
+            case "report-type":
+
+                reportType = button.dataset.type;
+
+                renderReportControls();
+
+                break;
+
+
             case "new-hours":
 
                 openHoursModal();
@@ -4646,7 +6255,7 @@ document
     )
     .addEventListener(
         "click",
-        openEppModal
+        () => openEppModal()
     );
 
 
@@ -4656,7 +6265,7 @@ document
     )
     .addEventListener(
         "click",
-        openInsuranceModal
+        () => openInsuranceModal()
     );
 
 
@@ -4666,7 +6275,7 @@ document
     )
     .addEventListener(
         "click",
-        openTrainingModal
+        () => openTrainingModal()
     );
 
 
@@ -4676,7 +6285,7 @@ document
     )
     .addEventListener(
         "click",
-        openMedicalModal
+        () => openMedicalModal()
     );
 
 
@@ -4866,6 +6475,14 @@ function renderAll() {
     renderFindings();
 
     renderInspections();
+
+    renderIncidents();
+
+    renderIperc();
+
+    renderProfile();
+
+    renderReportControls();
 
     renderDashboard();
 

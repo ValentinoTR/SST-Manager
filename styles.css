@@ -3300,3 +3300,210 @@ tbody tr:hover {
     color: #b91c1c;
     font-weight: 800;
 }
+
+
+/* ================================ */
+/* FICHA, INCIDENTES, IPERC Y REPORTES */
+/* ================================ */
+
+[hidden] {
+    display: none !important;
+}
+
+.page > .panel + .panel {
+    margin-top: 14px;
+}
+
+.worker-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+    color: var(--primary);
+    text-align: left;
+}
+
+.worker-link:hover {
+    text-decoration: underline;
+}
+
+.cell-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 9px;
+}
+
+.badge-risk {
+    font-size: 10px;
+}
+
+td.center,
+th.center {
+    text-align: center;
+}
+
+.profile-card {
+    margin-bottom: 14px;
+}
+
+.profile-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.profile-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 18px;
+}
+
+.profile-id {
+    flex: 1;
+    min-width: 180px;
+}
+
+.profile-id h3 {
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+
+.profile-data {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 16px 0 12px;
+}
+
+.profile-data dt {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.profile-data dd {
+    margin-top: 3px;
+    font-weight: 700;
+}
+
+.profile-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 14px;
+}
+
+.tab {
+    background: none;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.tab:hover {
+    color: var(--primary);
+}
+
+.tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-count {
+    display: inline-block;
+    min-width: 18px;
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 10px;
+    text-align: center;
+}
+
+.profile-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 12px 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.report-builder {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.segmented {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.segment {
+    border: 0;
+    background: transparent;
+    padding: 9px 16px;
+    border-radius: 9px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.segment.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.report-params {
+    min-width: 260px;
+}
+
+.btn-large {
+    padding: 14px 28px;
+    font-size: 15px;
+}
+
+.report-preview {
+    width: 100%;
+    height: 640px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+}
+
+@media print {
+    .sidebar,
+    .topbar {
+        display: none !important;
+    }
+}
