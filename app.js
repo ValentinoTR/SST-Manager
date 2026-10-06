@@ -915,6 +915,14 @@ function openModal({
         }
 
 
+        if (field.max) {
+
+            input.max =
+                field.max;
+
+        }
+
+
         if (field.accept) {
 
             input.accept =
@@ -2136,8 +2144,18 @@ function openTrainingModal(workerId = "") {
             },
 
             {
+                name: "grade",
+                label: "Nota (0 a 20) · desde 15 aprueba",
+                type: "number",
+                min: "0",
+                max: "20",
+                step: "0.5",
+                placeholder: "Ej. 16"
+            },
+
+            {
                 name: "status",
-                label: "Estado",
+                label: "Estado (si pones nota, se calcula solo)",
                 type: "select",
                 options: [
                     "Programada",
@@ -2153,9 +2171,27 @@ function openTrainingModal(workerId = "") {
 
         async onSubmit(data) {
 
+            const record =
+                await withAttachment(data);
+
+            const result =
+                SSTMetrics.trainingResult(record.grade);
+
+            if (result) {
+
+                record.grade = Number(record.grade);
+
+                record.status = result;
+
+            } else {
+
+                delete record.grade;
+
+            }
+
             state.training.push({
                 id: createId(),
-                ...(await withAttachment(data))
+                ...record
             });
 
 
@@ -2170,6 +2206,33 @@ function openTrainingModal(workerId = "") {
         }
 
     });
+
+}
+
+
+const TRAINING_BADGES = {
+    Aprobado:    "badge-green",
+    Desaprobado: "badge-red",
+    Completada:  "badge-green",
+    Pendiente:   "badge-red"
+};
+
+
+function trainingStatusHtml(record) {
+
+    const hasGrade =
+        record.grade !== undefined &&
+        record.grade !== "" &&
+        record.grade !== null;
+
+    return `
+        <span class="badge ${TRAINING_BADGES[record.status] || "badge-yellow"}">
+            ${escapeHtml(record.status)}
+        </span>
+        ${hasGrade
+            ? `<small class="cell-sub">Nota: ${escapeHtml(record.grade)}</small>`
+            : ""}
+    `;
 
 }
 
@@ -2209,32 +2272,6 @@ function renderTraining() {
             )
             .map(record => {
 
-                let badge =
-                    "badge-yellow";
-
-
-                if (
-                    record.status ===
-                    "Completada"
-                ) {
-
-                    badge =
-                        "badge-green";
-
-                }
-
-
-                if (
-                    record.status ===
-                    "Pendiente"
-                ) {
-
-                    badge =
-                        "badge-red";
-
-                }
-
-
                 return `
 
                     <tr>
@@ -2261,11 +2298,7 @@ function renderTraining() {
 
                         <td>
 
-                            <span
-                                class="badge ${badge}"
-                            >
-                                ${record.status}
-                            </span>
+                            ${trainingStatusHtml(record)}
 
                         </td>
 
@@ -4696,7 +4729,7 @@ function profileTabContent(profile) {
                     `<strong>${escapeHtml(item.topic)}</strong>`,
                     formatDate(item.date),
                     escapeHtml(item.provider || "—"),
-                    escapeHtml(item.status),
+                    trainingStatusHtml(item),
                     attachmentButton(item, "Certificado") || "—"
                 ]),
                 "Este colaborador aún no tiene capacitaciones registradas."

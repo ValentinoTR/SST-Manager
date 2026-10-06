@@ -183,10 +183,12 @@
         sections.push({
             key: "capacitaciones",
             title: "Capacitaciones",
-            columns: ["Colaborador", "Capacitación", "Fecha", "Entidad / instructor", "Estado"],
+            columns: ["Colaborador", "Capacitación", "Fecha", "Entidad / instructor", "Nota", "Estado"],
             rows: training.map(item => [
                 nameOf(item.workerId), item.topic, fmtDate(item.date),
-                item.provider || "—", item.status
+                item.provider || "—",
+                item.grade === undefined || item.grade === "" ? "—" : item.grade,
+                item.status
             ])
         });
 
@@ -290,7 +292,9 @@
                 label: "Seguros vencidos",
                 value: countBy(insurance, item => M.expirationState(item.end, todayString).status === "expired")
             },
-            { label: "Capacitaciones completadas", value: countBy(training, item => item.status === "Completada") },
+            { label: "Capacitaciones realizadas", value: countBy(training, item => M.isTrainingDone(item.status)) },
+            { label: "Capacitaciones aprobadas", value: countBy(training, item => item.status === "Aprobado") },
+            { label: "Capacitaciones desaprobadas", value: countBy(training, item => item.status === "Desaprobado") },
             { label: "EMO con resultado apto", value: countBy(medical, item => item.result === "Apto") },
             {
                 label: "% de asistencia",

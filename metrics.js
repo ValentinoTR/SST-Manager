@@ -58,6 +58,11 @@
         { value: 3, label: "3 - Extremadamente dañino" }
     ];
 
+    // Capacitaciones con nota (0 a 20): desde 15 se aprueba
+    const TRAINING_PASS_GRADE = 15;
+
+    const TRAINING_DONE_STATUSES = ["Completada", "Aprobado", "Desaprobado"];
+
     const MONTH_LABELS = [
         "Ene", "Feb", "Mar", "Abr", "May", "Jun",
         "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
@@ -301,6 +306,27 @@
        por eso se cuentan charlas únicas (fecha + tema).
        --------------------------------------------------------- */
 
+    // Resultado según la nota; null si no hay nota válida
+    function trainingResult(grade) {
+
+        if (grade === "" || grade === null || grade === undefined) {
+            return null;
+        }
+
+        const value = Number(grade);
+
+        if (!Number.isFinite(value) || value < 0 || value > 20) {
+            return null;
+        }
+
+        return value >= TRAINING_PASS_GRADE ? "Aprobado" : "Desaprobado";
+    }
+
+    // Una capacitación ya realizada (aprobada o no) cuenta como charla dada
+    function isTrainingDone(status) {
+        return TRAINING_DONE_STATUSES.includes(status);
+    }
+
     function groupSessions(records) {
 
         const map = new Map();
@@ -320,7 +346,7 @@
 
             const session = map.get(key);
 
-            if (record.status === "Completada") {
+            if (isTrainingDone(record.status)) {
                 session.done = true;
                 session.attendees.add(record.workerId);
             }
@@ -925,6 +951,9 @@
         EPP_CATALOG,
         INSURANCE_CATALOG,
         FINDING_TYPES,
+        TRAINING_PASS_GRADE,
+        trainingResult,
+        isTrainingDone,
         INCIDENT_TYPES,
         INCIDENT_SEVERITIES,
         RISK_PROBABILITY,
