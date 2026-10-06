@@ -655,3 +655,34 @@ test("pendingActions incluye incidentes abiertos y omite los cerrados", () => {
     assert.equal(items[0].text, "Cambiar escalera");
     assert.equal(items[0].daysOpen, 4);
 });
+
+
+/* ---------- Capacitaciones con nota ---------- */
+
+test("trainingResult: desde 15 aprueba y hasta 14 desaprueba", () => {
+    assert.equal(M.trainingResult(20), "Aprobado");
+    assert.equal(M.trainingResult("15"), "Aprobado");
+    assert.equal(M.trainingResult(14.5), "Desaprobado");
+    assert.equal(M.trainingResult(14), "Desaprobado");
+    assert.equal(M.trainingResult(0), "Desaprobado");
+    assert.equal(M.trainingResult(""), null);          // sin nota
+    assert.equal(M.trainingResult(undefined), null);
+    assert.equal(M.trainingResult(21), null);          // fuera de la escala 0-20
+    assert.equal(M.trainingResult(-1), null);
+    assert.equal(M.trainingResult("abc"), null);
+});
+
+test("las charlas con alumnos aprobados o desaprobados cuentan como realizadas", () => {
+    const state = {
+        goals: { trainingMonthly: 2, trainingYearly: 0 },
+        training: [
+            { workerId: "w1", topic: "Uso de EPP", date: "2026-10-01", status: "Aprobado", grade: 17 },
+            { workerId: "w2", topic: "Uso de EPP", date: "2026-10-01", status: "Desaprobado", grade: 12 },
+            { workerId: "w1", topic: "Altura", date: "2026-10-02", status: "Programada" }
+        ]
+    };
+    const stats = M.trainingStats(state, "2026-10");
+    assert.equal(stats.monthDone, 1);   // "Uso de EPP" es una sola charla; "Altura" aún no se da
+    assert.ok(M.isTrainingDone("Aprobado") && M.isTrainingDone("Desaprobado") && M.isTrainingDone("Completada"));
+    assert.ok(!M.isTrainingDone("Programada") && !M.isTrainingDone("Pendiente"));
+});

@@ -88,6 +88,22 @@ test("reporte por área filtra trabajadores, incidentes, hallazgos e IPERC del �
     assert.equal(section(report, "iperc").rows[0][5], "Alto");
 });
 
+test("reporte de capacitaciones muestra la nota y cuenta aprobadas y desaprobadas", () => {
+    const graded = JSON.parse(JSON.stringify(state));
+    graded.training = [
+        { workerId: "a", topic: "Uso de EPP", date: "2026-10-03", provider: "Ing. Perico León", status: "Aprobado", grade: 17 },
+        { workerId: "b", topic: "Uso de EPP", date: "2026-10-03", provider: "Ing. Perico León", status: "Desaprobado", grade: 12 },
+        { workerId: "a", topic: "Altura", date: "2026-10-04", status: "Programada" }
+    ];
+    const report = R.buildReport(graded, { type: "mensual", month: "2026-10" }, TODAY);
+    const rows = section(report, "capacitaciones").rows;
+    assert.ok(rows.some(row => row[4] === 17 && row[5] === "Aprobado"));
+    assert.ok(rows.some(row => row[4] === 12 && row[5] === "Desaprobado"));
+    assert.equal(value(report, "Capacitaciones realizadas"), 2);
+    assert.equal(value(report, "Capacitaciones aprobadas"), 1);
+    assert.equal(value(report, "Capacitaciones desaprobadas"), 1);
+});
+
 test("seguros: cuenta vigentes y vencidos a la fecha del reporte", () => {
     const report = R.buildReport(state, { type: "anual", year: "2026" }, TODAY);
     assert.equal(value(report, "Seguros vigentes"), 1);
