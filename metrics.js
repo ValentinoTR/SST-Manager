@@ -38,6 +38,26 @@
         { value: "MEJORA", label: "Mejora continua" }
     ];
 
+    const INCIDENT_TYPES = [
+        { value: "Incidente", label: "Incidente" },
+        { value: "Accidente", label: "Accidente" }
+    ];
+
+    const INCIDENT_SEVERITIES = ["Leve", "Moderado", "Grave", "Fatal"];
+
+    // Matriz IPERC 3x3: nivel = probabilidad x severidad
+    const RISK_PROBABILITY = [
+        { value: 1, label: "1 - Baja" },
+        { value: 2, label: "2 - Media" },
+        { value: 3, label: "3 - Alta" }
+    ];
+
+    const RISK_SEVERITY = [
+        { value: 1, label: "1 - Ligeramente dañino" },
+        { value: 2, label: "2 - Dañino" },
+        { value: 3, label: "3 - Extremadamente dañino" }
+    ];
+
     const MONTH_LABELS = [
         "Ene", "Feb", "Mar", "Abr", "May", "Jun",
         "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
@@ -710,6 +730,18 @@
                 });
             });
 
+        (state.incidents || [])
+            .filter(item => item.status !== "Cerrado")
+            .forEach(item => {
+                items.push({
+                    source: String(item.type || "Incidente"),
+                    kind: "incident",
+                    text: String(item.correctiveAction || item.description || ""),
+                    area: String(item.area || "").trim(),
+                    date: item.date || ""
+                });
+            });
+
         (state.inspections || []).forEach(inspection => {
             (inspection.observations || [])
                 .filter(item => item.status !== "Cerrada")
@@ -778,9 +810,114 @@
         (state.training || []).forEach(item => add(item.date));
         (state.findings || []).forEach(item => add(item.date));
         (state.inspections || []).forEach(item => add(item.date));
+        (state.incidents || []).forEach(item => add(item.date));
         (state.hours || []).forEach(item => add(item.month));
 
         return [...years].sort();
+    }
+
+
+    /* ---------------------------------------------------------
+       IPERC: nivel de riesgo (Bajo / Medio / Alto)
+       --------------------------------------------------------- */
+
+    function riskLevel(probability, severity) {
+
+        const score = Number(probability) * Number(severity);
+
+        if (!Number.isFinite(score) || score < 1) {
+            return { key: "none", label: "Sin evaluar", icon: "⚪", className: "badge-gray", score: 0 };
+        }
+
+        if (score <= 2) {
+            return { key: "low", label: "Bajo", icon: "🟢", className: "badge-green", score };
+        }
+
+        if (score <= 4) {
+            return { key: "medium", label: "Medio", icon: "🟡", className: "badge-yellow", score };
+        }
+
+        return { key: "high", label: "Alto", icon: "🔴", className: "badge-red", score };
+    }
+
+    function ipercStats(state) {
+
+        const stats = { low: 0, medium: 0, high: 0, total: 0 };
+
+        (state.iperc || []).forEach(item => {
+            const level = riskLevel(item.probability, item.severity);
+            if (stats[level.key] !== undefined) {
+                stats[level.key] += 1;
+            }
+            stats.total += 1;
+        });
+
+        return stats;
+    }
+
+
+    /* ---------------------------------------------------------
+       ASISTENCIA: resumen de una lista de registros
+       Mismo criterio que la página Asistencia.
+       --------------------------------------------------------- */
+
+    function attendanceSummary(records) {
+
+        const work = records.filter(record => record.status !== "Descanso");
+        const attendance = records.filter(record => record.status === "Asistencia").length;
+        const absences = records.filter(record => record.status === "Inasistencia").length;
+        const late = records.filter(record => record.status === "Tardanza").length;
+
+        return {
+            days: work.length,
+            attendance,
+            absences,
+            late,
+            pct: work.length ? Math.round((attendance + late) / work.length * 100) : null
+        };
+    }
+
+
+    /* ---------------------------------------------------------
+       FICHA DEL TRABAJADOR: todo lo registrado a su nombre
+       --------------------------------------------------------- */
+
+    function workerProfile(state, workerId, todayString) {
+
+        const worker = (state.workers || []).find(item => item.id === workerId);
+
+        if (!worker) {
+            return null;
+        }
+
+        const own = list =>
+            (state[list] || [])
+                .filter(item => item.workerId === workerId)
+                .sort((a, b) =>
+                    String(b.date || b.start || "").localeCompare(String(a.date || a.start || "")));
+
+        const attendance = own("attendance");
+        const incidents = own("incidents");
+
+        return {
+            worker,
+            epp: own("epp"),
+            insurance: own("insurance"),
+            training: own("training"),
+            medical: own("medical"),
+            attendance,
+            attendanceSummary: attendanceSummary(attendance),
+            incidents,
+            alerts: {
+                epp: own("epp").filter(item =>
+                    ["expired", "due"].includes(expirationState(item.renewal, todayString).status)).length,
+                insurance: own("insurance").filter(item =>
+                    ["expired", "due"].includes(expirationState(item.end, todayString).status)).length,
+                medical: own("medical").filter(item =>
+                    ["expired", "due"].includes(expirationState(item.expiry, todayString).status)).length,
+                incidents: incidents.filter(item => item.status !== "Cerrado").length
+            }
+        };
     }
 
 
@@ -788,8 +925,16 @@
         EPP_CATALOG,
         INSURANCE_CATALOG,
         FINDING_TYPES,
+        INCIDENT_TYPES,
+        INCIDENT_SEVERITIES,
+        RISK_PROBABILITY,
+        RISK_SEVERITY,
         MONTH_LABELS,
         normalize,
+        riskLevel,
+        ipercStats,
+        attendanceSummary,
+        workerProfile,
         matchesKeyword,
         daysUntil,
         expirationState,
