@@ -4784,7 +4784,7 @@ function profileTabContent(profile) {
                 formatDate(item.date),
                 `<span class="badge ${INCIDENT_BADGES[item.type] || "badge-gray"}">${escapeHtml(item.type)}</span>`,
                 `<span class="badge ${SEVERITY_BADGES[item.severity] || "badge-gray"}">${escapeHtml(item.severity)}</span>`,
-                escapeHtml(item.description),
+                eventCellHtml(item),
                 `<span class="badge ${item.status === "Cerrado" ? "badge-green" : "badge-yellow"}">${escapeHtml(item.status)}</span>`,
                 attachmentButton(item, "Foto") || "—"
             ]),
@@ -4976,6 +4976,14 @@ function openIncidentModal(incidentId = null, workerId = "") {
         fields: [
 
             {
+                name: "name",
+                label: "Nombre del evento",
+                required: true,
+                full: true,
+                placeholder: "Ej. Volcadura de vehículo, corte en la mano..."
+            },
+
+            {
                 name: "type",
                 label: "Tipo",
                 type: "select",
@@ -5102,6 +5110,17 @@ function openIncidentModal(incidentId = null, workerId = "") {
 }
 
 
+function eventCellHtml(record) {
+
+    const name = String(record.name || "").trim();
+
+    return name
+        ? `<strong>${escapeHtml(name)}</strong><span class="cell-desc">${escapeHtml(record.description)}</span>`
+        : escapeHtml(record.description);
+
+}
+
+
 function renderIncidents() {
 
     const tbody = document.getElementById("incidentsTbody");
@@ -5169,7 +5188,7 @@ function renderIncidents() {
                         </span>
                     </td>
 
-                    <td>${escapeHtml(record.description)}</td>
+                    <td>${eventCellHtml(record)}</td>
 
                     <td>
                         ${escapeHtml(record.correctiveAction || "—")}
@@ -5226,6 +5245,172 @@ function renderIncidents() {
         }).join("");
 
 }
+
+
+/* =========================================================
+   RELOJ DEL ÚLTIMO EVENTO
+   Cualquier incidente o accidente reinicia el contador.
+   ========================================================= */
+
+function renderEventClock() {
+
+    const stats =
+        SSTMetrics.lastEventStats(state, today());
+
+    const clock = document.getElementById("eventClock");
+
+    const days = stats.days;
+
+    clock.classList.toggle("danger", days !== null && days <= 7);
+
+    clock.classList.toggle("warn", days !== null && days > 7 && days <= 30);
+
+    document.getElementById("eventDays").textContent =
+        days === null ? "—" : days;
+
+    document.getElementById("eventDaysLabel").textContent =
+        days === 1
+            ? "día del último evento"
+            : "días del último evento";
+
+    document.getElementById("eventLastName").textContent =
+        stats.last ? stats.last.title : "Sin eventos registrados";
+
+    document.getElementById("eventLastDate").textContent =
+        stats.last
+            ? formatDate(stats.last.date)
+            : "Registra el primero en Incidentes";
+
+    renderEventDetail(stats);
+
+}
+
+
+function renderEventDetail(stats = SSTMetrics.lastEventStats(state, today())) {
+
+    const detail = document.getElementById("eventDetail");
+
+    if (!stats.last) {
+
+        detail.innerHTML = `
+            ${emptyBoard("Aún no hay eventos registrados.")}
+            <div class="modal-actions">
+                <button class="btn btn-primary" data-action="new-event">
+                    + Registrar evento
+                </button>
+            </div>
+        `;
+
+        return;
+
+    }
+
+    const last = stats.last;
+
+    const field = (label, value) => `
+        <div>
+            <dt>${label}</dt>
+            <dd>${value || "—"}</dd>
+        </div>
+    `;
+
+    detail.innerHTML = `
+
+        <div class="event-detail-days">
+            <strong>${stats.days}</strong>
+            <span>${stats.days === 1 ? "día" : "días"} desde el último evento</span>
+        </div>
+
+        <div class="event-card">
+
+            <span class="badge ${INCIDENT_BADGES[last.type] || "badge-gray"}">
+                ${escapeHtml(last.type)}
+            </span>
+
+            <h3>${escapeHtml(last.title)}</h3>
+
+            <p>${escapeHtml(last.description || "")}</p>
+
+            <dl>
+                ${field("Fecha", formatDate(last.date))}
+                ${field("Severidad", escapeHtml(last.severity))}
+                ${field("Trabajador", last.workerId ? escapeHtml(workerName(last.workerId)) : "")}
+                ${field("Área", escapeHtml(last.area))}
+                ${field("Acción correctiva", escapeHtml(last.correctiveAction))}
+                ${field("Estado", escapeHtml(last.status))}
+            </dl>
+
+            ${last.attachment
+                ? `<div class="actions" style="margin-top:10px">${attachmentButton(last, "Evidencia")}</div>`
+                : ""}
+
+        </div>
+
+        <h4>Historial de eventos (${stats.total})</h4>
+
+        <ul class="event-history">
+            ${stats.events.map(item => `
+                <li class="${item === last ? "is-last" : ""}">
+                    <span>${formatDate(item.date)}</span>
+                    <span>${escapeHtml(item.title)}</span>
+                    <span class="badge ${INCIDENT_BADGES[item.type] || "badge-gray"}">
+                        ${escapeHtml(item.type)}
+                    </span>
+                    ${item.gapBefore !== null
+                        ? `<small>${item.gapBefore} d sin eventos antes</small>`
+                        : ""}
+                </li>
+            `).join("")}
+        </ul>
+
+        <div class="modal-actions">
+            <button class="btn btn-light" data-action="go-incidents">
+                Ver todos los eventos
+            </button>
+            <button class="btn btn-primary" data-action="new-event">
+                + Registrar evento
+            </button>
+        </div>
+
+    `;
+
+}
+
+
+function openEventDialog() {
+
+    renderEventDetail();
+
+    document.getElementById("eventBackdrop").classList.add("show");
+
+}
+
+
+function closeEventDialog() {
+
+    document.getElementById("eventBackdrop").classList.remove("show");
+
+}
+
+
+document
+    .getElementById("eventBackdrop")
+    .addEventListener("click", event => {
+
+        if (event.target.id === "eventBackdrop") {
+            closeEventDialog();
+        }
+
+    });
+
+
+document.addEventListener("keydown", event => {
+
+    if (event.key === "Escape") {
+        closeEventDialog();
+    }
+
+});
 
 
 /* =========================================================
@@ -6075,6 +6260,40 @@ document.addEventListener(
                 break;
 
 
+            case "show-last-event":
+
+                openEventDialog();
+
+                break;
+
+
+            case "close-event-dialog":
+
+                closeEventDialog();
+
+                break;
+
+
+            case "go-incidents":
+
+                closeEventDialog();
+
+                openPage("incidentes");
+
+                break;
+
+
+            case "new-event":
+
+                closeEventDialog();
+
+                openPage("incidentes");
+
+                openIncidentModal();
+
+                break;
+
+
             case "edit-incident":
 
                 openIncidentModal(id);
@@ -6510,6 +6729,8 @@ function renderAll() {
     renderInspections();
 
     renderIncidents();
+
+    renderEventClock();
 
     renderIperc();
 
