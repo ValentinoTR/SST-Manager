@@ -883,6 +883,62 @@
 
 
     /* ---------------------------------------------------------
+       ÚLTIMO EVENTO: días transcurridos desde el último
+       incidente o accidente (sin distinguir el tipo).
+       Los eventos con fecha futura no reinician el contador.
+       --------------------------------------------------------- */
+
+    function eventTitle(item) {
+
+        const name = String(item.name || "").trim();
+
+        if (name) {
+            return name;
+        }
+
+        const description = String(item.description || "").trim();
+
+        if (description) {
+            return description.length > 60
+                ? description.slice(0, 57) + "…"
+                : description;
+        }
+
+        return String(item.type || "Evento");
+    }
+
+    function lastEventStats(state, todayString) {
+
+        const events = (state.incidents || [])
+            .filter(item => /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")))
+            .sort((a, b) =>
+                String(b.date).localeCompare(String(a.date)) ||
+                String(b.id || "").localeCompare(String(a.id || "")))
+            .map(item => Object.assign({}, item, {
+                title: eventTitle(item),
+                daysAgo: Math.max(0, -daysUntil(item.date, todayString))
+            }));
+
+        // Días sin eventos que hubo antes de cada evento
+        events.forEach((item, index) => {
+            const older = events[index + 1];
+            item.gapBefore = older
+                ? Math.max(0, Math.round((utcDay(item.date) - utcDay(older.date)) / 86400000))
+                : null;
+        });
+
+        const last = events.find(item => item.date <= todayString) || null;
+
+        return {
+            total: events.length,
+            last,
+            days: last ? last.daysAgo : null,
+            events
+        };
+    }
+
+
+    /* ---------------------------------------------------------
        ASISTENCIA: resumen de una lista de registros
        Mismo criterio que la página Asistencia.
        --------------------------------------------------------- */
@@ -964,6 +1020,8 @@
         ipercStats,
         attendanceSummary,
         workerProfile,
+        eventTitle,
+        lastEventStats,
         matchesKeyword,
         daysUntil,
         expirationState,

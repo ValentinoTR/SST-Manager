@@ -3507,3 +3507,183 @@ th.center {
         display: none !important;
     }
 }
+
+/* ================================ */
+/* RELOJ DEL ÚLTIMO EVENTO */
+/* ================================ */
+
+.cell-desc {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.event-clock {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    padding: 18px 22px;
+    border: 1px solid var(--border);
+    border-left: 8px solid var(--green);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.93);
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+
+.event-clock:hover {
+    box-shadow: 0 8px 22px rgba(15, 92, 117, .15);
+    transform: translateY(-1px);
+}
+
+.event-clock.warn {
+    border-left-color: var(--yellow);
+}
+
+.event-clock.danger {
+    border-left-color: var(--red);
+}
+
+.event-clock-icon {
+    font-size: 34px;
+}
+
+.event-clock-days {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 110px;
+}
+
+.event-clock-days strong {
+    font-size: 44px;
+    line-height: 1;
+    color: var(--green);
+}
+
+.event-clock.warn .event-clock-days strong {
+    color: var(--yellow);
+}
+
+.event-clock.danger .event-clock-days strong {
+    color: var(--red);
+}
+
+.event-clock-days small,
+.event-clock-info small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.event-clock-info {
+    flex: 1;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.event-clock-info strong {
+    font-size: 16px;
+}
+
+.event-clock-hint {
+    color: var(--primary);
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.event-modal {
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#eventDetail {
+    padding: 4px 26px 24px;
+}
+
+.event-detail-days {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.event-detail-days strong {
+    font-size: 40px;
+    color: var(--primary);
+}
+
+.event-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    background: var(--background);
+}
+
+.event-card h3 {
+    font-size: 17px;
+    margin: 6px 0;
+}
+
+.event-card dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.event-card dt {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.event-card dd {
+    margin-top: 2px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.event-history {
+    list-style: none;
+    max-height: 260px;
+    overflow-y: auto;
+    margin-bottom: 14px;
+}
+
+.event-history li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.event-history li.is-last {
+    font-weight: 800;
+}
+
+.event-history small {
+    color: var(--muted);
+    margin-left: auto;
+}
+
+@media (max-width: 640px) {
+    .event-clock-hint {
+        display: none;
+    }
+}

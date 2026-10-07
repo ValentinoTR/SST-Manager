@@ -253,6 +253,30 @@
 
         >
 
+            <button
+                class="event-clock"
+                id="eventClock"
+                type="button"
+                data-action="show-last-event"
+                title="Ver el último evento"
+            >
+                <span class="event-clock-icon">🕒</span>
+
+                <span class="event-clock-days">
+                    <strong id="eventDays">—</strong>
+                    <small id="eventDaysLabel">días del último evento</small>
+                </span>
+
+                <span class="event-clock-info">
+                    <small>Último evento</small>
+                    <strong id="eventLastName">Sin eventos registrados</strong>
+                    <small id="eventLastDate"></small>
+                </span>
+
+                <span class="event-clock-hint">Ver detalle ›</span>
+            </button>
+
+
 
 
             <div class="metric-grid">
@@ -1987,6 +2011,29 @@
 
 
 
+
+<!-- ========================= -->
+<!-- ÚLTIMO EVENTO -->
+<!-- ========================= -->
+
+<div class="modal-backdrop" id="eventBackdrop">
+    <div class="modal event-modal">
+        <div class="modal-header">
+            <div>
+                <span class="modal-label">SST Control</span>
+                <h2>Último evento</h2>
+            </div>
+            <button
+                class="modal-close"
+                type="button"
+                data-action="close-event-dialog"
+            >
+                ×
+            </button>
+        </div>
+        <div id="eventDetail"></div>
+    </div>
+</div>
 
 <div
 

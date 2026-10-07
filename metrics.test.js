@@ -686,3 +686,65 @@ test("las charlas con alumnos aprobados o desaprobados cuentan como realizadas",
     assert.ok(M.isTrainingDone("Aprobado") && M.isTrainingDone("Desaprobado") && M.isTrainingDone("Completada"));
     assert.ok(!M.isTrainingDone("Programada") && !M.isTrainingDone("Pendiente"));
 });
+
+
+/* ---------- Reloj del último evento ---------- */
+
+test("lastEventStats cuenta los días desde el último incidente o accidente", () => {
+    const state = {
+        incidents: [
+            { id: "a1", type: "Accidente", name: "Volcadura vehicular", date: "2026-08-28" },
+            { id: "a2", type: "Incidente", name: "Corte en la uña", date: "2026-06-01" }
+        ]
+    };
+    const stats = M.lastEventStats(state, "2026-10-15");
+    assert.equal(stats.days, 48);                      // 28/08 → 15/10
+    assert.equal(stats.last.title, "Volcadura vehicular");
+    assert.equal(stats.total, 2);
+    assert.deepEqual(stats.events.map(item => item.title), ["Volcadura vehicular", "Corte en la uña"]);
+    assert.equal(stats.events[0].gapBefore, 88);       // días sin eventos antes del último
+    assert.equal(stats.events[1].gapBefore, null);     // el más antiguo no tiene anterior
+});
+
+test("un evento nuevo reinicia el contador y conserva el anterior en el historial", () => {
+    const state = {
+        incidents: [
+            { id: "a1", type: "Accidente", name: "Volcadura vehicular", date: "2026-08-28" },
+            { id: "a2", type: "Incidente", name: "Golpe en el dedo", date: "2026-10-15" }
+        ]
+    };
+    const stats = M.lastEventStats(state, "2026-10-15");
+    assert.equal(stats.days, 0);
+    assert.equal(stats.last.title, "Golpe en el dedo");
+    assert.equal(stats.events[1].title, "Volcadura vehicular");
+});
+
+test("lastEventStats sin eventos, con fechas futuras o sin nombre", () => {
+    assert.deepEqual(
+        { days: M.lastEventStats({}, TODAY).days, last: M.lastEventStats({}, TODAY).last },
+        { days: null, last: null }
+    );
+
+    const future = M.lastEventStats(
+        { incidents: [{ id: "x", type: "Incidente", name: "Futuro", date: "2026-12-01" }] },
+        TODAY
+    );
+    assert.equal(future.last, null);                   // no reinicia el contador
+
+    const unnamed = M.lastEventStats(
+        { incidents: [{ id: "y", type: "Accidente", description: "Se cayó una caja", date: "2026-10-01" }] },
+        TODAY
+    );
+    assert.equal(unnamed.last.title, "Se cayó una caja");   // registros anteriores sin nombre
+    assert.equal(M.eventTitle({ type: "Accidente" }), "Accidente");
+});
+
+test("el mismo día gana el evento registrado después", () => {
+    const stats = M.lastEventStats({
+        incidents: [
+            { id: "k1", type: "Incidente", name: "Primero", date: "2026-10-01" },
+            { id: "k2", type: "Incidente", name: "Segundo", date: "2026-10-01" }
+        ]
+    }, TODAY);
+    assert.equal(stats.last.title, "Segundo");
+});

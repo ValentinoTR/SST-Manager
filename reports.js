@@ -223,10 +223,10 @@
         sections.push({
             key: "incidentes",
             title: "Incidentes y accidentes",
-            columns: ["Fecha", "Tipo", "Trabajador", "Área", "Severidad", "Descripción",
+            columns: ["Fecha", "Evento", "Tipo", "Trabajador", "Área", "Severidad", "Descripción",
                 "Acción correctiva", "Responsable", "Estado"],
             rows: incidents.map(item => [
-                fmtDate(item.date), item.type, item.workerId ? nameOf(item.workerId) : "—",
+                fmtDate(item.date), M.eventTitle(item), item.type, item.workerId ? nameOf(item.workerId) : "—",
                 item.area || "—", item.severity, item.description,
                 item.correctiveAction || "—", item.responsible || "—", item.status
             ])
