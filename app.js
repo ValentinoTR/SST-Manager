@@ -20,9 +20,8 @@ function createId() {
 
 
 function today() {
-    return new Date()
-        .toISOString()
-        .slice(0, 10);
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 
@@ -183,10 +182,12 @@ let state = loadState();
 
 function saveState() {
 
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(state)
-    );
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+        alert("No se pudo guardar el cambio en este navegador. No cierres la página: descarga un respaldo desde Respaldos para conservar la información. Revisa el espacio disponible y los permisos de almacenamiento.");
+        throw error;
+    }
 
     renderAll();
 
@@ -8750,4 +8751,4 @@ function renderAll() {
    INICIAR SISTEMA
    ========================================================= */
 
-renderAll();
+renderAll();
