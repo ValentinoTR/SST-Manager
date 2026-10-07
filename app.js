@@ -37,84 +37,6 @@ function currentMonth() {
 const initialState = {
 
     workers: [
-
-        {
-            id: createId(),
-            dni: "45871236",
-            name: "Carlos Mendoza",
-            role: "Operario",
-            area: "Operaciones",
-            phone: "999 111 222",
-            joined: "2026-01-10",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "71234568",
-            name: "Luis Ramírez",
-            role: "Técnico",
-            area: "Mantenimiento",
-            phone: "999 222 333",
-            joined: "2026-01-15",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "63542178",
-            name: "José Torres",
-            role: "Operario",
-            area: "Operaciones",
-            phone: "999 333 444",
-            joined: "2026-02-01",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "48579632",
-            name: "Miguel Flores",
-            role: "Supervisor",
-            area: "Producción",
-            phone: "999 444 555",
-            joined: "2026-02-05",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "70894563",
-            name: "Andrés Vega",
-            role: "Operario",
-            area: "Producción",
-            phone: "999 555 666",
-            joined: "2026-02-12",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "60214587",
-            name: "Pedro Salazar",
-            role: "Técnico",
-            area: "Mantenimiento",
-            phone: "999 666 777",
-            joined: "2026-03-01",
-            status: "Activo"
-        },
-
-        {
-            id: createId(),
-            dni: "74125896",
-            name: "Juan Rojas",
-            role: "Ayudante",
-            area: "Operaciones",
-            phone: "999 777 888",
-            joined: "2026-03-08",
-            status: "Activo"
-        }
-
     ],
 
     attendance: [],
@@ -190,6 +112,7 @@ function saveState() {
     }
 
     renderAll();
+    window.SSTCloud?.queueStateSync(state);
 
 }
 
@@ -386,10 +309,19 @@ async function storeAttachment(file) {
 
         const id = createId();
 
-        await filesTransaction(
-            "readwrite",
-            store => store.put(file, id)
-        );
+        if (window.SSTCloud?.isSignedIn()) {
+            await window.SSTCloud.uploadAttachment(id, file);
+        }
+
+        try {
+            await filesTransaction(
+                "readwrite",
+                store => store.put(file, id)
+            );
+        } catch (cacheError) {
+            if (!window.SSTCloud?.isSignedIn()) throw cacheError;
+            console.warn("El archivo quedó guardado en la nube; no se pudo crear la copia local.", cacheError);
+        }
 
         return {
             id,
@@ -440,6 +372,10 @@ async function dropAttachments(ids) {
             }
         );
 
+        if (window.SSTCloud?.isSignedIn()) {
+            await window.SSTCloud.deleteAttachment(list);
+        }
+
     } catch (error) {
 
         console.error("No se pudieron borrar los archivos.", error);
@@ -459,15 +395,24 @@ async function openAttachment(id) {
                 store => store.get(id)
             );
 
-        if (!blob) {
+        const fileBlob = blob || (window.SSTCloud?.isSignedIn()
+            ? await window.SSTCloud.downloadAttachment(id)
+            : null);
 
-            showToast("El archivo ya no está disponible en este navegador.");
-
+        if (!fileBlob) {
+            showToast("El archivo no está disponible en este dispositivo ni en la nube.");
             return;
-
         }
 
-        const url = URL.createObjectURL(blob);
+        if (!blob) {
+            try {
+                await filesTransaction("readwrite", store => store.put(fileBlob, id));
+            } catch (cacheError) {
+                console.warn("No se pudo guardar una copia local del adjunto.", cacheError);
+            }
+        }
+
+        const url = URL.createObjectURL(fileBlob);
 
         window.open(url, "_blank");
 

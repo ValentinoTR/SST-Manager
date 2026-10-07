@@ -18,8 +18,8 @@ const dashboard=$('page-dashboard');
 const metrics=dashboard.querySelector('.metric-grid');
 dashboard.prepend(metrics);
 metrics.insertAdjacentHTML('beforebegin','<div class="overview-intro"><div><span class="eyebrow">PREVENIR ES CUIDAR</span><h2>Tu equipo, más seguro cada día.</h2><p>Identifica lo urgente, sigue el cumplimiento y organiza las acciones de seguridad desde un solo lugar.</p></div><span class="overview-mark" aria-hidden="true">✓</span></div>');
-main.insertAdjacentHTML('beforeend','<p class="data-note">SST Control · Información guardada en este navegador. Descarga respaldos para conservar tus registros y evidencias.</p>');
-try { if(!localStorage.getItem(STORAGE_KEY)) dashboard.querySelector('.overview-intro').insertAdjacentHTML('afterend','<div class="demo-note">Estás viendo colaboradores de ejemplo. Puedes editarlos o eliminarlos desde Colaboradores antes de registrar tu equipo.</div>'); } catch {}
+main.insertAdjacentHTML('beforeend','<p class="data-note">SST Control · Registros sincronizados con tu cuenta privada de Supabase. Los adjuntos se guardan en un espacio privado.</p>');
+try { if(!localStorage.getItem(STORAGE_KEY)) dashboard.querySelector('.overview-intro').insertAdjacentHTML('afterend','<div class="demo-note">Tu espacio está listo. Agrega tu primer colaborador para comenzar.</div>'); } catch {}
 document.body.insertAdjacentHTML('beforeend',`<div class="drawer-overlay" id="drawerOverlay" hidden></div>
 <dialog class="workspace-dialog" id="searchDialog" aria-labelledby="searchTitle"><div class="dialog-heading"><h2 id="searchTitle">Encuentra lo que necesitas</h2><button class="dialog-close" data-close="searchDialog" aria-label="Cerrar búsqueda">×</button></div><input class="search-input" id="globalSearch" type="search" placeholder="Módulo, nombre, DNI o área…" aria-label="Buscar módulos y colaboradores"><div class="search-results" id="searchResults" aria-live="polite"></div></dialog>
 <dialog class="workspace-dialog" id="backupDialog" aria-labelledby="backupTitle"><div class="dialog-heading"><h2 id="backupTitle">Respalda tu espacio de trabajo</h2><button class="dialog-close" data-close="backupDialog" aria-label="Cerrar respaldos">×</button></div><div class="dialog-content"><p>Descarga todos tus registros y archivos adjuntos en un respaldo JSON. Guárdalo en un lugar privado: contiene información de tus colaboradores.</p><div class="backup-actions"><button class="btn btn-primary" id="downloadBackup">Descargar respaldo completo</button><button class="btn btn-light" id="restoreBackup">Restaurar respaldo</button></div><input type="file" id="backupFile" accept=".json,application/json" hidden><p class="backup-status" id="backupStatus" role="status"></p></div></dialog>`);
@@ -63,7 +63,14 @@ async function snapshot(){
  const db=await filesDb();
  const entries=await new Promise((resolve,reject)=>{const tx=db.transaction('files','readonly');const store=tx.objectStore('files');const keys=store.getAllKeys(),values=store.getAll();tx.oncomplete=()=>resolve(keys.result.map((key,i)=>({key,value:values.result[i]})));tx.onerror=()=>reject(tx.error);});
  const records=JSON.parse(JSON.stringify(state));
- const attachments=[];for(const {key,value} of entries)attachments.push({id:key,name:value.name||'archivo',type:value.type,data:await toDataUrl(value)});
+ const localFiles=new Map(entries.map(({key,value})=>[key,value]));
+ const metadata=new Map();
+ const seen=new Set();
+ const collect=value=>{if(!value||typeof value!=='object'||seen.has(value))return;seen.add(value);SSTMetrics.recordFiles(value).forEach(file=>metadata.set(file.id,file));if(Array.isArray(value))value.forEach(collect);else Object.values(value).forEach(collect);};
+ collect(records);
+ const ids=new Set([...localFiles.keys(),...metadata.keys()]);
+ const attachments=[];
+ for(const id of ids){let value=localFiles.get(id);if(!value&&window.SSTCloud?.isSignedIn())value=await window.SSTCloud.downloadAttachment(id);if(!value)throw new Error(`No se pudo recuperar el adjunto ${metadata.get(id)?.name||id} desde la nube.`);const meta=metadata.get(id)||{};attachments.push({id,name:value.name||meta.name||'archivo',type:value.type||meta.type||'',data:await toDataUrl(value)});}
  return {format:'sst-control-backup',version:1,createdAt:new Date().toISOString(),state:records,attachments};
 }
 function download(data,suffix=''){const blob=new Blob([JSON.stringify(data)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`SST-respaldo${suffix}-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -88,7 +95,12 @@ $('backupFile').onchange=async e=>{
   // Check quota before committing the evidence transaction; rollback records on failure.
   localStorage.setItem(STORAGE_KEY,serialized);
   try{await filesTransaction('readwrite',store=>{for(const [id,value] of files)store.put(value,id);});}catch(error){if(oldRaw===null)localStorage.removeItem(STORAGE_KEY);else localStorage.setItem(STORAGE_KEY,oldRaw);throw error;}
-  state=next;renderAll();status('Respaldo restaurado correctamente.');showToast('Registros y evidencias restaurados.');
+  state=next;renderAll();
+  if(window.SSTCloud?.isSignedIn()){
+   for(const [id,value] of files)await window.SSTCloud.uploadAttachment(id,value);
+   await window.SSTCloud.syncNow(next);
+  }
+  status('Respaldo restaurado correctamente.');showToast('Registros y evidencias restaurados.');
  }catch(error){status('No se pudo restaurar: '+error.message);}finally{busy(false);e.target.value='';}
 };
 })();
