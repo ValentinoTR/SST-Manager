@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+    <title>SST Control | Gestión de Personal</title>
+
+
+
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+
+
+
+<body>
+
+
+
+<div class="app">
+
+
+
+    <!-- ========================= -->
+
+    <!-- MENÚ LATERAL -->
+
+    <!-- ========================= -->
+
+
+
+    <aside class="sidebar">
+
+
+
+        <div class="brand">
+
+            <div class="brand-icon">S</div>
+
+
+
+            <div>
+
+                <h2>SST Control</h2>
+
+                <span>Gestión de Personal</span>
+
+            </div>
+
+        </div>
+
+
+
+        <nav class="menu">
+
+
+
+            <button class="nav-item active" data-page="dashboard">
+
+                <span>▦</span>
+
+                Dashboard
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="colaboradores">
+
+                <span>👥</span>
+
+                Colaboradores
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="asistencia">
+
+                <span>✓</span>
+
+                Asistencia
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="epp">
+
+                <span>⛑</span>
+
+                EPP
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="seguros">
+
+                <span>🛡</span>
+
+                Seguros
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="capacitaciones">
+
+                <span>🎓</span>
+
+                Capacitaciones
+
+            </button>
+
+
+
+            <button class="nav-item" data-page="examenes">
+
+                <span>❤</span>
+
+                Exámenes médicos
+
+            </button>
+
+
+
+        <button class="nav-item" data-page="hallazgos">
+                <span>⚠</span>
+                Hallazgos
+            </button>
+
+            <button class="nav-item" data-page="inspecciones">
+                <span>🔍</span>
+                Inspecciones
+            </button>
+
+            <button class="nav-item" data-page="incidentes">
+                <span>🚨</span>
+                Incidentes
+            </button>
+
+            <button class="nav-item" data-page="iperc">
+                <span>☢</span>
+                IPERC
+            </button>
+
+            <button class="nav-item" data-page="programa">
+                <span>📅</span>
+                Programa anual
+            </button>
+
+            <button class="nav-item" data-page="reportes">
+                <span>📄</span>
+                Reportes
+            </button>
+
+        </nav>
+
+
+
+        <div class="sidebar-footer">
+
+            <div class="status-dot"></div>
+
+
+
+            <div>
+
+                <strong>Sistema activo</strong>
+
+                <small>Datos guardados localmente</small>
+
+            </div>
+
+        </div>
+
+
+
+    </aside>
+
+
+
+
+
+    <!-- ========================= -->
+
+    <!-- CONTENIDO -->
+
+    <!-- ========================= -->
+
+
+
+    <main class="main">
+
+
+
+        <header class="topbar">
+
+
+
+            <div>
+
+                <p class="breadcrumb">Sistema de Seguridad y Salud en el Trabajo</p>
+
+                <h1 id="pageTitle">Dashboard</h1>
+
+                <p id="pageSubtitle">
+
+                    Resumen general del personal y cumplimiento SST.
+
+                </p>
+
+            </div>
+
+
+
+            <button
+
+                class="btn btn-primary"
+
+                id="btnTopNewWorker"
+
+            >
+
+                + Nuevo colaborador
+
+            </button>
+
+
+
+        </header>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- DASHBOARD -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page active"
+
+            id="page-dashboard"
+
+        >
+
+            <!-- ========================= -->
+            <!-- ATENCIÓN INMEDIATA (lo urgente primero) -->
+            <!-- ========================= -->
+
+            <section class="urgent-panel" id="urgentPanel">
+
+                <article class="panel urgent-main">
+                    <div class="panel-header">
+                        <div>
+                            <h3>⚡ Atención inmediata</h3>
+                            <p>Lo vencido y pendiente de todos los módulos, de lo más grave a lo menos grave. Haz clic para ir al módulo.</p>
+                        </div>
+                        <div class="urgent-counts" id="urgentCounts"></div>
+                    </div>
+                    <div class="urgent-list" id="urgentList"></div>
+                </article>
+
+                <article class="panel urgent-side">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Alertas y vencimientos</h3>
+                            <p>EPP, seguros y exámenes que vencen en los próximos 30 días.</p>
+                        </div>
+                    </div>
+                    <div
+                        class="alerts"
+                        id="alertsList"
+                    ></div>
+                </article>
+
+            </section>
+
+            <button
+                class="event-clock"
+                id="eventClock"
+                type="button"
+                data-action="show-last-event"
+                title="Ver el último evento"
+            >
+                <span class="event-clock-icon">🕒</span>
+
+                <span class="event-clock-days">
+                    <strong id="eventDays">—</strong>
+                    <small id="eventDaysLabel">días del último evento</small>
+                </span>
+
+                <span class="event-clock-info">
+                    <small>Último evento</small>
+                    <strong id="eventLastName">Sin eventos registrados</strong>
+                    <small id="eventLastDate"></small>
+                </span>
+
+                <span class="event-clock-hint">Ver detalle ›</span>
+            </button>
+
+
+
+
+            <div class="metric-grid">
+
+
+
+                <article class="metric-card">
+
+
+
+                    <div class="metric-icon blue">
+
+                        👥
+
+                    </div>
+
+
+
+                    <div>
+
+                        <span>Colaboradores activos</span>
+
+                        <strong id="metricWorkers">0</strong>
+
+                        <small>Personal registrado</small>
+
+                    </div>
+
+
+
+                </article>
+
+
+
+
+
+                <article class="metric-card">
+
+
+
+                    <div class="metric-icon green">
+
+                        ✓
+
+                    </div>
+
+
+
+                    <div>
+
+                        <span>Asistencia del mes</span>
+
+                        <strong id="metricAttendance">0%</strong>
+
+                        <small>Promedio general</small>
+
+                    </div>
+
+
+
+                </article>
+
+
+
+
+
+                <article class="metric-card">
+
+
+
+                    <div class="metric-icon orange">
+
+                        ⛑
+
+                    </div>
+
+
+
+                    <div>
+
+                        <span>EPP por renovar</span>
+
+                        <strong id="metricEpp">0</strong>
+
+                        <small>Próximos 30 días</small>
+
+                    </div>
+
+
+
+                </article>
+
+
+
+
+
+                <article class="metric-card">
+
+
+
+                    <div class="metric-icon red">
+
+                        🛡
+
+                    </div>
+
+
+
+                    <div>
+
+                        <span>Seguros por vencer</span>
+
+                        <strong id="metricInsurance">0</strong>
+
+                        <small>Próximos 30 días</small>
+
+                    </div>
+
+
+
+                </article>
+
+
+                <article class="metric-card">
+
+                    <div class="metric-icon blue">
+                        📅
+                    </div>
+
+                    <div>
+                        <span>Programa anual SST</span>
+                        <strong id="metricProgram">—</strong>
+                        <small id="metricProgramSub">Cumplimiento a la fecha</small>
+                    </div>
+
+                </article>
+
+
+
+            </div>
+
+
+
+
+
+            <!-- ========================= -->
+            <!-- TABLERO MENSUAL SST -->
+            <!-- ========================= -->
+
+            <section class="board pbi" id="dashboardBoard">
+
+                <aside class="pbi-filters" id="boardFilters">
+
+                    <div class="filter-group">
+                        <h4>Año</h4>
+                        <div id="filterYears"></div>
+                    </div>
+
+                    <div class="filter-group">
+                        <h4>Mes</h4>
+                        <div id="filterMonths"></div>
+                    </div>
+
+                    <input type="month" id="dashboardMonth" hidden>
+
+                </aside>
+
+                <div class="pbi-main">
+
+                <div class="board-toolbar">
+                    <div>
+                        <h2>Tablero mensual SST</h2>
+                        <p>Capacitaciones, hallazgos, inspecciones y asistencia siguen el año y mes elegidos. EPP y seguros muestran el estado de hoy.</p>
+                    </div>
+                </div>
+
+                <div class="pbi-tiles" id="boardTiles"></div>
+
+                <div class="pbi-gauges" id="boardGauges"></div>
+
+                <div class="board-grid">
+
+                    <article class="panel board-wide" id="boardEpp">
+                        <div class="panel-header">
+                            <div>
+                                <h3>EPP entregado por colaborador</h3>
+                                <p>Casco, lentes, visera y ropa uniforme.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-epp">+ Entregar EPP</button>
+                            </div>
+                        </div>
+                        <div id="boardEppBody"></div>
+                    </article>
+
+                    <article class="panel" id="boardInsurance">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Vencimiento de SCTR y Vida Ley</h3>
+                                <p>Fecha en que vence cada seguro por colaborador.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-insurance">+ Seguro</button>
+                            </div>
+                        </div>
+                        <div id="boardInsuranceBody"></div>
+                    </article>
+
+                    <article class="panel" id="boardTraining">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Capacitaciones y charlas</h3>
+                                <p>Charlas realizadas frente a tu meta.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-light btn-small" data-action="set-goals">Definir meta</button>
+                                <button class="btn btn-primary btn-small" data-action="new-training">+ Capacitación</button>
+                            </div>
+                        </div>
+                        <div id="boardTrainingBody"></div>
+                    </article>
+
+                    <article class="panel" id="boardInspections">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Inspecciones y observaciones</h3>
+                                <p>Observaciones de cada inspección y cuántas ya cerraste.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-inspection">+ Inspección</button>
+                            </div>
+                        </div>
+                        <div id="boardInspectionsBody"></div>
+                    </article>
+
+                    <article class="panel" id="boardAreas">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Pendientes por área</h3>
+                                <p>Observaciones y hallazgos que siguen abiertos.</p>
+                            </div>
+                        </div>
+                        <div id="boardAreasBody"></div>
+                    </article>
+
+                    <article class="panel board-wide" id="boardFindings">
+                        <div class="panel-header">
+                            <div>
+                                <h3>HPH, HPI y mejoras continuas</h3>
+                                <p>Observados y levantados en el mes.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-finding">+ Hallazgo</button>
+                            </div>
+                        </div>
+                        <div id="boardFindingsBody"></div>
+                    </article>
+
+                    <article class="panel board-wide" id="boardActions">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Acciones pendientes</h3>
+                                <p>Lo más antiguo primero, hasta que lo cierres.</p>
+                            </div>
+                        </div>
+                        <div id="boardActionsBody"></div>
+                    </article>
+
+                    <article class="panel board-wide" id="boardAttendance">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Asistencia e inasistencia por colaborador</h3>
+                                <p>Resumen del mes elegido.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-attendance">+ Asistencia</button>
+                            </div>
+                        </div>
+                        <div id="boardAttendanceBody"></div>
+                    </article>
+
+                    <article class="panel board-wide" id="boardHours">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Horas trabajadas por mes</h3>
+                                <p>Ingresa el total de cada mes y el gráfico se va completando.</p>
+                            </div>
+                            <div class="board-actions">
+                                <button class="btn btn-primary btn-small" data-action="new-hours">+ Registrar horas</button>
+                            </div>
+                        </div>
+                        <div id="boardHoursBody"></div>
+                    </article>
+
+                </div>
+
+                </div>
+
+            </section>
+
+
+            
+<div class="analytics-grid">
+
+                <article class="panel chart-panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Asistencia registrada</h3>
+                            <p>Asistencias, inasistencias y tardanzas acumuladas.</p>
+                        </div>
+                    </div>
+                    <div class="chart-body">
+                        <div class="vertical-chart" id="attendanceChart">
+                            <div class="chart-empty">Sin datos registrados</div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel chart-panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Personal por área</h3>
+                            <p>Distribución de colaboradores activos por área.</p>
+                        </div>
+                    </div>
+                    <div class="chart-body">
+                        <div class="vertical-chart" id="areaChart">
+                            <div class="chart-empty">Sin datos registrados</div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel chart-panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Alertas SST por tipo</h3>
+                            <p>Elementos que requieren seguimiento o renovación.</p>
+                        </div>
+                    </div>
+                    <div class="chart-body">
+                        <div class="vertical-chart" id="alertsChart">
+                            <div class="chart-empty">Sin alertas registradas</div>
+                        </div>
+                    </div>
+                </article>
+
+            </div>
+
+
+            <article class="panel dashboard-table-panel">
+
+                <div class="panel-header">
+                    <div>
+                        <h3>Resumen de personal</h3>
+                        <p>Vista rápida de los últimos colaboradores registrados.</p>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="dashboard-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Colaborador</th>
+                                <th>Cargo</th>
+                                <th>Área</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboardWorkersTbody">
+                            <tr class="dashboard-empty-row">
+                                <td colspan="4">Sin colaboradores registrados.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </article>
+
+
+            <div class="dashboard-grid">
+
+
+
+                <article class="panel">
+
+
+
+                    <div class="panel-header">
+
+
+
+                        <div>
+
+                            <h3>Accesos rápidos</h3>
+
+                            <p>Registra información del personal.</p>
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <div class="quick-grid">
+
+
+
+                        <button
+
+                            class="quick-card"
+
+                            data-action="new-worker"
+
+                        >
+
+                            <span>👤</span>
+
+
+
+                            <div>
+
+                                <strong>Nuevo colaborador</strong>
+
+                                <small>Registrar personal</small>
+
+                            </div>
+
+                        </button>
+
+
+
+
+
+                        <button
+
+                            class="quick-card"
+
+                            data-action="new-attendance"
+
+                        >
+
+                            <span>✓</span>
+
+
+
+                            <div>
+
+                                <strong>Asistencia</strong>
+
+                                <small>Registrar jornada</small>
+
+                            </div>
+
+                        </button>
+
+
+
+
+
+                        <button
+
+                            class="quick-card"
+
+                            data-action="new-epp"
+
+                        >
+
+                            <span>⛑</span>
+
+
+
+                            <div>
+
+                                <strong>Entrega EPP</strong>
+
+                                <small>Asignar equipo</small>
+
+                            </div>
+
+                        </button>
+
+
+
+
+
+                        <button
+
+                            class="quick-card"
+
+                            data-action="new-insurance"
+
+                        >
+
+                            <span>🛡</span>
+
+
+
+                            <div>
+
+                                <strong>Seguro</strong>
+
+                                <small>Registrar cobertura</small>
+
+                            </div>
+
+                        </button>
+
+
+
+                    </div>
+
+
+
+                </article>
+
+
+
+
+
+                
+
+
+
+            </div>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- COLABORADORES -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-colaboradores"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Personal registrado</h3>
+
+
+
+                        <p>
+
+                            Agrega, modifica, desactiva o elimina colaboradores.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <div class="toolbar">
+
+
+
+                        <input
+
+                            type="search"
+
+                            id="workerSearch"
+
+                            placeholder="Buscar por nombre, DNI o cargo..."
+
+                        >
+
+
+
+                        <button
+
+                            class="btn btn-light"
+
+                            id="btnExportWorkers"
+
+                        >
+
+                            Exportar CSV
+
+                        </button>
+
+
+
+                        <button
+
+                            class="btn btn-primary"
+
+                            id="btnNewWorker"
+
+                        >
+
+                            + Colaborador
+
+                        </button>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>DNI</th>
+
+                            <th>Cargo</th>
+
+                            <th>Área</th>
+
+                            <th>Ingreso</th>
+
+                            <th>Estado</th>
+
+                            <th>Acciones</th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="workersTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- ASISTENCIA -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-asistencia"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Control de asistencia</h3>
+
+
+
+                        <p>
+
+                            Resumen mensual individual de cada colaborador.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <div class="toolbar">
+
+
+
+                        <input
+
+                            type="month"
+
+                            id="attendanceMonth"
+
+                        >
+
+
+
+                        <button
+
+                            class="btn btn-primary"
+
+                            id="btnNewAttendance"
+
+                        >
+
+                            + Registrar asistencia
+
+                        </button>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>Días registrados</th>
+
+                            <th>Asistencias</th>
+
+                            <th>Inasistencias</th>
+
+                            <th>Tardanzas</th>
+
+                            <th>% asistencia</th>
+
+                            <th>Acción</th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="attendanceTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- EPP -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-epp"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Equipos de Protección Personal</h3>
+
+
+
+                        <p>
+
+                            Control de entrega, talla, cantidad y renovación.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <button
+
+                        class="btn btn-primary"
+
+                        id="btnNewEpp"
+
+                    >
+
+                        + Entregar EPP
+
+                    </button>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>EPP</th>
+
+                            <th>Cantidad</th>
+
+                            <th>Talla</th>
+
+                            <th>Entrega</th>
+
+                            <th>Renovación</th>
+
+                            <th>Estado</th>
+
+                            <th></th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="eppTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- SEGUROS -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-seguros"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Seguros del personal</h3>
+
+
+
+                        <p>
+
+                            Control de pólizas, aseguradoras y vigencias.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <button
+
+                        class="btn btn-primary"
+
+                        id="btnNewInsurance"
+
+                    >
+
+                        + Registrar seguro
+
+                    </button>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>Seguro</th>
+
+                            <th>Aseguradora</th>
+
+                            <th>Póliza</th>
+
+                            <th>Inicio</th>
+
+                            <th>Vencimiento</th>
+
+                            <th>Estado</th>
+
+                            <th></th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="insuranceTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- CAPACITACIONES -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-capacitaciones"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Capacitaciones</h3>
+
+
+
+                        <p>
+
+                            Registra cursos y entrenamientos de cada trabajador.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <button
+
+                        class="btn btn-primary"
+
+                        id="btnNewTraining"
+
+                    >
+
+                        + Registrar capacitación
+
+                    </button>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>Capacitación</th>
+
+                            <th>Fecha</th>
+
+                            <th>Entidad / Instructor</th>
+
+                            <th>Estado</th>
+
+                            <th></th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="trainingTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+        <!-- ========================= -->
+
+        <!-- EXÁMENES MÉDICOS -->
+
+        <!-- ========================= -->
+
+
+
+        <section
+
+            class="page"
+
+            id="page-examenes"
+
+        >
+
+
+
+            <article class="panel">
+
+
+
+                <div class="panel-header responsive-header">
+
+
+
+                    <div>
+
+                        <h3>Exámenes médicos ocupacionales</h3>
+
+
+
+                        <p>
+
+                            Control de aptitud y vencimientos médicos.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <button
+
+                        class="btn btn-primary"
+
+                        id="btnNewMedical"
+
+                    >
+
+                        + Registrar examen
+
+                    </button>
+
+
+
+                </div>
+
+
+
+
+
+                <div class="table-wrap">
+
+
+
+                    <table>
+
+
+
+                        <thead>
+
+
+
+                        <tr>
+
+                            <th>Colaborador</th>
+
+                            <th>Tipo de examen</th>
+
+                            <th>Fecha</th>
+
+                            <th>Resultado</th>
+
+                            <th>Vencimiento</th>
+
+                            <th>Estado</th>
+
+                            <th></th>
+
+                        </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody id="medicalTbody"></tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            </article>
+
+
+
+        </section>
+
+
+
+
+
+    <!-- ========================= -->
+        <!-- HALLAZGOS (HPH / HPI / MEJORAS) -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-hallazgos">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+
+                    <div>
+                        <h3>Hallazgos: HPH, HPI y mejoras continuas</h3>
+                        <p>Registra lo observado y márcalo como cerrado cuando lo levantes.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-finding">
+                        + Registrar hallazgo
+                    </button>
+
+                </div>
+
+                <div class="table-wrap">
+
+                    <table>
+
+                        <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Área / lugar</th>
+                            <th>Descripción</th>
+                            <th>Estado</th>
+                            <th>Cierre</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+
+                        <tbody id="findingsTbody"></tbody>
+
+                    </table>
+
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- INSPECCIONES -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-inspecciones">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+
+                    <div>
+                        <h3>Inspecciones</h3>
+                        <p>Cada inspección tiene sus observaciones; ciérralas una por una cuando las levantes.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-inspection">
+                        + Registrar inspección
+                    </button>
+
+                </div>
+
+                <div class="inspection-list" id="inspectionsList"></div>
+
+            </article>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- FICHA DEL COLABORADOR -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-ficha">
+
+            <article class="panel profile-card" id="profileHeader"></article>
+
+            <article class="panel">
+                <div class="tabs" id="profileTabs"></div>
+                <div class="profile-body" id="profileBody"></div>
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- INCIDENTES Y ACCIDENTES -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-incidentes">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3>Incidentes y accidentes laborales</h3>
+                        <p>Registra lo ocurrido, la acción correctiva y ciérralo cuando se levante.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-incident">
+                        + Registrar incidente / accidente
+                    </button>
+                </div>
+
+                <div class="board-stats" id="incidentsStats"></div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Trabajador</th>
+                            <th>Área</th>
+                            <th>Severidad</th>
+                            <th>Descripción</th>
+                            <th>Acción correctiva</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody id="incidentsTbody"></tbody>
+                    </table>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- IPERC -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-iperc">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3>IPERC · Matriz de riesgos</h3>
+                        <p>Peligro → Riesgo inicial → Controles (jerarquía) → Riesgo residual.</p>
+                    </div>
+
+                    <button class="btn btn-primary" data-action="new-iperc">
+                        + Registrar riesgo
+                    </button>
+                </div>
+
+                <div class="board-stats" id="ipercStats"></div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Área / actividad</th>
+                            <th>Peligro</th>
+                            <th>Riesgo</th>
+                            <th>Riesgo inicial</th>
+                            <th>Medidas de control</th>
+                            <th>Riesgo residual</th>
+                            <th>Responsable</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody id="ipercTbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="board-legend">
+                    <span>🟢 Bajo (1-2 pts) · 🟡 Medio (3-4 pts) · 🔴 Alto (6-9 pts) — puntos = probabilidad × severidad. El riesgo residual es el que queda después de aplicar los controles; “actual” usa el residual si ya se evaluó y, si no, el inicial. Un riesgo es significativo si su nivel inicial o residual es Alto.</span>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- PROGRAMA ANUAL SST -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-programa">
+
+            <article class="panel">
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3>Programa Anual de Seguridad y Salud en el Trabajo</h3>
+                        <p>Programa cada actividad por mes (P) y márcala como ejecutada (E) con su evidencia.</p>
+                    </div>
+
+                    <div class="toolbar">
+                        <select id="programYear" aria-label="Año del programa"></select>
+                        <button class="btn btn-primary" data-action="new-program">
+                            + Actividad
+                        </button>
+                    </div>
+                </div>
+
+                <div class="board-stats" id="programStats"></div>
+
+                <div id="programSummary"></div>
+
+                <div class="table-wrap">
+                    <table class="program-table">
+                        <thead id="programThead"></thead>
+                        <tbody id="programTbody"></tbody>
+                        <tfoot id="programTfoot"></tfoot>
+                    </table>
+                </div>
+
+                <div class="board-legend">
+                    <span>
+                        <b class="prog-cell planned">P</b> Programada ·
+                        <b class="prog-cell current">P</b> Mes en curso ·
+                        <b class="prog-cell overdue">P</b> Atrasada ·
+                        <b class="prog-cell done">E</b> Ejecutada —
+                        haz clic en una celda P para registrar la ejecución.
+                    </span>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- REPORTES -->
+        <!-- ========================= -->
+
+        <section class="page" id="page-reportes">
+
+            <article class="panel">
+
+                <div class="panel-header">
+                    <div>
+                        <h3>Reporte SST</h3>
+                        <p>Elige el tipo de reporte, genéralo y descárgalo como PDF o Excel.</p>
+                    </div>
+                </div>
+
+                <div class="report-builder">
+
+                    <div class="segmented" id="reportTypes">
+                        <button class="segment active" data-action="report-type" data-type="mensual">Mensual</button>
+                        <button class="segment" data-action="report-type" data-type="anual">Anual</button>
+                        <button class="segment" data-action="report-type" data-type="trabajador">Por trabajador</button>
+                        <button class="segment" data-action="report-type" data-type="area">Por área</button>
+                    </div>
+
+                    <div class="report-params">
+
+                        <div class="form-group" data-param="mensual">
+                            <label for="reportMonth">Mes</label>
+                            <input type="month" id="reportMonth">
+                        </div>
+
+                        <div class="form-group" data-param="anual" hidden>
+                            <label for="reportYear">Año</label>
+                            <select id="reportYear"></select>
+                        </div>
+
+                        <div class="form-group" data-param="trabajador" hidden>
+                            <label for="reportWorker">Trabajador</label>
+                            <select id="reportWorker"></select>
+                        </div>
+
+                        <div class="form-group" data-param="area" hidden>
+                            <label for="reportArea">Área</label>
+                            <select id="reportArea"></select>
+                        </div>
+
+                    </div>
+
+                    <button class="btn btn-primary btn-large" id="btnGenerateReport">
+                        Generar reporte SST
+                    </button>
+
+                </div>
+
+            </article>
+
+            <article class="panel" id="reportResult" hidden>
+
+                <div class="panel-header responsive-header">
+                    <div>
+                        <h3 id="reportTitle">Reporte</h3>
+                        <p>Vista previa. Descárgalo en el formato que necesites.</p>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn btn-light" id="btnReportPdf">
+                            📄 Descargar PDF
+                        </button>
+                        <button class="btn btn-primary" id="btnReportExcel">
+                            📊 Descargar Excel
+                        </button>
+                    </div>
+                </div>
+
+                <iframe
+                    class="report-preview"
+                    id="reportPreview"
+                    title="Vista previa del reporte"
+                ></iframe>
+
+            </article>
+
+        </section>
+
+    </main>
+
+
+
+</div>
+
+
+
+
+
+<!-- ========================= -->
+
+<!-- MODAL -->
+
+<!-- ========================= -->
+
+
+
+<div
+
+    class="modal-backdrop"
+
+    id="modalBackdrop"
+
+>
+
+
+
+    <div class="modal">
+
+
+
+        <div class="modal-header">
+
+
+
+            <div>
+
+                <span class="modal-label">SST Control</span>
+
+                <h2 id="modalTitle">Nuevo registro</h2>
+
+            </div>
+
+
+
+            <button
+
+                class="modal-close"
+
+                id="modalClose"
+
+                type="button"
+
+            >
+
+                ×
+
+            </button>
+
+
+
+        </div>
+
+
+
+
+
+        <form id="modalForm">
+
+
+
+            <div
+
+                class="form-grid"
+
+                id="modalFields"
+
+            ></div>
+
+
+
+
+
+            <div class="modal-actions">
+
+
+
+                <button
+
+                    type="button"
+
+                    class="btn btn-light"
+
+                    id="modalCancel"
+
+                >
+
+                    Cancelar
+
+                </button>
+
+
+
+                <button
+
+                    type="submit"
+
+                    class="btn btn-primary"
+
+                    id="modalSubmit"
+
+                >
+
+                    Guardar
+
+                </button>
+
+
+
+            </div>
+
+
+
+        </form>
+
+
+
+    </div>
+
+
+
+</div>
+
+
+
+
+
+<!-- ========================= -->
+<!-- ÚLTIMO EVENTO -->
+<!-- ========================= -->
+
+<div class="modal-backdrop" id="eventBackdrop">
+    <div class="modal event-modal">
+        <div class="modal-header">
+            <div>
+                <span class="modal-label">SST Control</span>
+                <h2>Último evento</h2>
+            </div>
+            <button
+                class="modal-close"
+                type="button"
+                data-action="close-event-dialog"
+            >
+                ×
+            </button>
+        </div>
+        <div id="eventDetail"></div>
+    </div>
+</div>
+
+<div
+
+    class="toast"
+
+    id="toast"
+
+></div>
+
+
+
+
+
+<script src="metrics.js"></script>
+<script src="reports.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+    const byId = (id) => document.getElementById(id);
+
+    function safeNumber(value) {
+        const number = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function cleanLabel(value, fallback) {
+        const label = String(value || "").trim();
+        return label || fallback;
+    }
+
+    function renderVerticalChart(containerId, data, emptyText) {
+        const container = byId(containerId);
+        if (!container) return;
+
+        const filtered = data.filter((item) => item.value > 0);
+        if (!filtered.length) {
+            container.innerHTML = `<div class="chart-empty">${emptyText}</div>`;
+            return;
+        }
+
+        const max = Math.max(...filtered.map((item) => item.value), 1);
+        container.innerHTML = filtered.map((item) => {
+            const height = Math.max(10, Math.round((item.value / max) * 100));
+            return `
+                <div class="vbar-item" title="${item.label}: ${item.value}">
+                    <strong class="vbar-value">${item.value}</strong>
+                    <div class="vbar-track">
+                        <div class="vbar-fill" style="height:${height}%"></div>
+                    </div>
+                    <span class="vbar-label">${item.label}</span>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function getWorkerRows() {
+        return [...document.querySelectorAll("#workersTbody tr")].filter((row) => row.cells.length >= 6);
+    }
+
+    function updateAreaChart() {
+        const counts = new Map();
+        getWorkerRows().forEach((row) => {
+            const area = cleanLabel(row.cells[3]?.textContent, "Sin área");
+            const estado = String(row.cells[5]?.textContent || "").toLowerCase();
+            if (!estado.includes("inactiv")) counts.set(area, (counts.get(area) || 0) + 1);
+        });
+
+        const data = [...counts.entries()]
+            .map(([label, value]) => ({ label, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 8);
+
+        renderVerticalChart("areaChart", data, "Sin datos registrados");
+    }
+
+    function updateAttendanceChart() {
+        let asistencias = 0;
+        let inasistencias = 0;
+        let tardanzas = 0;
+
+        [...document.querySelectorAll("#attendanceTbody tr")].forEach((row) => {
+            if (row.cells.length < 5) return;
+            asistencias += safeNumber(row.cells[2]?.textContent);
+            inasistencias += safeNumber(row.cells[3]?.textContent);
+            tardanzas += safeNumber(row.cells[4]?.textContent);
+        });
+
+        renderVerticalChart("attendanceChart", [
+            { label: "Asist.", value: asistencias },
+            { label: "Inasist.", value: inasistencias },
+            { label: "Tard.", value: tardanzas }
+        ], "Sin datos registrados");
+    }
+
+    function updateAlertsChart() {
+        const categories = { EPP: 0, Seguros: 0, Médicos: 0, Capacitaciones: 0, Otros: 0 };
+        const items = [...document.querySelectorAll("#alertsList .alert-item")];
+
+        items.forEach((item) => {
+            const text = String(item.textContent || "").toLowerCase();
+            if (text.includes("epp") || text.includes("equipo")) categories.EPP += 1;
+            else if (text.includes("seguro") || text.includes("póliza") || text.includes("poliza")) categories.Seguros += 1;
+            else if (text.includes("médic") || text.includes("medic") || text.includes("examen")) categories.Médicos += 1;
+            else if (text.includes("capacit") || text.includes("curso")) categories.Capacitaciones += 1;
+            else categories.Otros += 1;
+        });
+
+        const data = Object.entries(categories).map(([label, value]) => ({ label, value }));
+        renderVerticalChart("alertsChart", data, "Sin alertas registradas");
+    }
+
+    function updateDashboardTable() {
+        const target = byId("dashboardWorkersTbody");
+        if (!target) return;
+
+        const rows = getWorkerRows().slice(0, 8);
+        if (!rows.length) {
+            target.innerHTML = `<tr class="dashboard-empty-row"><td colspan="4">Sin colaboradores registrados.</td></tr>`;
+            return;
+        }
+
+        target.innerHTML = rows.map((row) => {
+            const worker = row.cells[0]?.innerHTML || "—";
+            const cargo = row.cells[2]?.textContent?.trim() || "—";
+            const area = row.cells[3]?.textContent?.trim() || "—";
+            const estado = row.cells[5]?.innerHTML || "—";
+            return `<tr><td>${worker}</td><td>${cargo}</td><td>${area}</td><td>${estado}</td></tr>`;
+        }).join("");
+    }
+
+    function refreshAnalytics() {
+        updateAreaChart();
+        updateAttendanceChart();
+        updateAlertsChart();
+        updateDashboardTable();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        refreshAnalytics();
+
+        ["workersTbody", "attendanceTbody", "alertsList"].forEach((id) => {
+            const node = byId(id);
+            if (!node) return;
+            new MutationObserver(refreshAnalytics).observe(node, { childList: true, subtree: true, characterData: true });
+        });
+
+        setTimeout(refreshAnalytics, 250);
+        setTimeout(refreshAnalytics, 1000);
+    });
+})();
+</script>
+
+
+
+
+</body>
+
+</html>
