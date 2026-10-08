@@ -719,6 +719,7 @@
 
         const observed = findings.reduce((sum, item) => sum + item.observed, 0);
         const closed = findings.reduce((sum, item) => sum + item.closed, 0);
+        const openThisMonth = findings.reduce((sum, item) => sum + item.open, 0);
         const openFindings = findings.reduce((sum, item) => sum + item.openAllTime, 0);
 
         return [
@@ -728,7 +729,7 @@
                 key: "training", label: "Charlas del mes", value: training.monthDone,
                 sub: training.monthGoal ? `Meta: ${training.monthGoal}` : "Sin meta definida"
             },
-            { key: "findings", label: "Hallazgos levantados", value: closed, sub: `de ${observed} observados` },
+            { key: "findings", label: "Hallazgos observados", value: observed, sub: `${closed} ${closed === 1 ? "levantado" : "levantados"} · ${openThisMonth} ${openThisMonth === 1 ? "pendiente" : "pendientes"}` },
             { key: "inspections", label: "Inspecciones del mes", value: inspections.totals.inspections, sub: `${inspections.totals.observations} observaciones` },
             {
                 key: "pending", label: "Pendientes abiertos",
@@ -1593,6 +1594,25 @@
                     date: action.due,
                     weight: late
                 });
+            });
+        });
+
+        // Hallazgos abiertos: mostrarlos también en el panel superior del dashboard.
+        (state.findings || []).forEach(finding => {
+            if (finding.status === "Cerrado") {
+                return;
+            }
+
+            const age = finding.date ? Math.max(0, -daysUntil(finding.date, todayString)) : 0;
+            add({
+                level: age > URGENT_OPEN_DAYS ? "high" : "medium",
+                category: "Hallazgos",
+                icon: "🔎",
+                page: "hallazgos",
+                title: `${String(finding.type || "Hallazgo")} pendiente: ${String(finding.description || "Sin descripción")}`,
+                detail: `${String(finding.area || "Sin área")} · abierto hace ${age} día(s)`,
+                date: finding.date || "",
+                weight: age
             });
         });
 
