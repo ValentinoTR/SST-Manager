@@ -399,15 +399,22 @@
 
             const ofType = all.filter(item => item.type === type.value);
             const observed = ofType.filter(item => inMonth(item.date, month));
-            const closed = observed.filter(item => item.status === "Cerrado").length;
+            const monthEnd = `${month}-31`;
+            const closed = ofType.filter(item =>
+                item.status === "Cerrado" &&
+                inMonth(item.closedDate || item.date, month)
+            ).length;
+            const open = observed.filter(item =>
+                item.status !== "Cerrado" || String(item.closedDate || item.date || "") > monthEnd
+            ).length;
 
             return {
                 type: type.value,
                 label: type.label,
                 observed: observed.length,
                 closed,
-                open: observed.length - closed,
-                pct: percent(closed, observed.length),
+                open,
+                pct: percent(closed, closed + open),
                 openAllTime: ofType.filter(item => item.status !== "Cerrado").length
             };
         });
@@ -648,8 +655,10 @@
 
         const byFinding = (key, label, item) => gauge(
             key, label,
-            ratio(item.closed, item.observed),
-            item.observed ? `${item.closed} de ${item.observed} del mes` : "Sin datos"
+            item.pct,
+            item.closed || item.open
+                ? `${item.closed} ${item.closed === 1 ? "levantado" : "levantados"} este mes · ${item.open} ${item.open === 1 ? "pendiente" : "pendientes"}`
+                : "Sin datos"
         );
 
         return [
