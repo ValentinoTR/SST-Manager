@@ -23,8 +23,9 @@
     const EPP_CATALOG = [
         { key: "casco",  label: "Casco",         keywords: ["casco"] },
         { key: "lentes", label: "Lentes",        keywords: ["lente"] },
-        { key: "visera", label: "Visera",        keywords: ["visera"] },
-        { key: "ropa",   label: "Ropa uniforme", keywords: ["uniforme", "ropa"] }
+        { key: "guantes", label: "Guantes",      keywords: ["guante"] },
+        { key: "ropa",   label: "Ropa uniforme", keywords: ["uniforme", "ropa"] },
+        { key: "zapatos", label: "Zapatos de seguridad", keywords: ["zapato", "calzado", "botin"] }
     ];
 
     const INSURANCE_CATALOG = [
@@ -1822,3 +1823,4 @@
         availableYears
     };
 });
+
