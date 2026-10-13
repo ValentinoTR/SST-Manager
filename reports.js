@@ -126,7 +126,7 @@
         const training = mine("training", "date");
         const medical = mine("medical", "date");
         const insurance = (state.insurance || []).filter(item => ids.has(item.workerId));
-        const attendance = (state.attendance || []).filter(item =>
+        const attendance = M.registeredAttendance(state.attendance || []).filter(item =>
             ids.has(item.workerId) && inPeriod(item.date));
 
         const incidents = (state.incidents || [])
@@ -203,21 +203,47 @@
         });
 
         const attendanceRows = scopeWorkers
-            .map(worker => ({
-                worker,
-                summary: M.attendanceSummary(
-                    attendance.filter(item => item.workerId === worker.id))
-            }))
+            .map(worker => {
+                const records = attendance.filter(item => item.workerId === worker.id);
+                return {
+                    worker,
+                    summary: M.attendanceSummary(records),
+                    hours: M.workedHours(records)
+                };
+            })
             .filter(row => row.summary.days > 0 || row.summary.absences > 0);
 
         sections.push({
             key: "asistencia",
             title: "Asistencia",
-            columns: ["Colaborador", "Días registrados", "Asistencias", "Inasistencias", "Tardanzas", "% asistencia"],
-            rows: attendanceRows.map(({ worker, summary }) => [
+            columns: ["Colaborador", "Días registrados", "Asistencias", "Inasistencias", "Tardanzas", "% asistencia", "Horas hombre"],
+            rows: attendanceRows.map(({ worker, summary, hours }) => [
                 worker.name, summary.days, summary.attendance, summary.absences, summary.late,
-                summary.pct === null ? "—" : summary.pct + "%"
+                summary.pct === null ? "—" : summary.pct + "%", hours
             ])
+        });
+
+        let attendanceMonths;
+
+        if (type === "mensual") {
+            attendanceMonths = [options.month || todayString.slice(0, 7)];
+        } else if (type === "anual") {
+            const year = options.year || todayString.slice(0, 4);
+            attendanceMonths = MONTH_NAMES.map((_, index) =>
+                `${year}-${String(index + 1).padStart(2, "0")}`);
+        } else {
+            attendanceMonths = [...new Set(attendance.map(item => item.date.slice(0, 7)))].sort();
+        }
+
+        sections.push({
+            key: "horas_hombre",
+            title: "Horas hombre trabajadas",
+            note: "Días trabajados suma las jornadas de todos los trabajadores. Cada asistencia o tardanza equivale a 10 horas; inasistencias y descansos suman 0 horas.",
+            columns: ["Mes", "Días trabajados", "Horas hombre"],
+            rows: attendanceMonths.map(month => {
+                const hours = M.workedHours(attendance.filter(item => item.date.startsWith(month + "-")));
+                return [monthTitle(month), hours / 10, hours];
+            })
         });
 
         sections.push({
@@ -300,6 +326,7 @@
                 label: "% de asistencia",
                 value: globalAttendance.pct === null ? "—" : globalAttendance.pct + "%"
             },
+            { label: "Horas hombre trabajadas", value: M.workedHours(attendance) },
             { label: "Incidentes", value: countBy(incidents, item => item.type === "Incidente") },
             { label: "Accidentes", value: countBy(incidents, item => item.type === "Accidente") },
             { label: "Incidentes/accidentes pendientes", value: countBy(incidents, item => item.status !== "Cerrado") }

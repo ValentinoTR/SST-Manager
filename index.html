@@ -17,7 +17,7 @@
     <meta name="theme-color" content="#102d2e">
     <meta name="description" content="SST Control: colaboradores, prevención y seguimiento de seguridad y salud en el trabajo.">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="workspace.css">
+    <link rel="stylesheet" href="workspace.css?v=20261013-attendance">
 
 </head>
 
@@ -583,10 +583,10 @@
                         <div class="panel-header">
                             <div>
                                 <h3>Horas trabajadas por mes</h3>
-                                <p>Ingresa el total de cada mes y el gráfico se va completando.</p>
+                                <p>Cálculo automático: 10 horas hombre por persona y día asistido.</p>
                             </div>
                             <div class="board-actions">
-                                <button class="btn btn-primary btn-small" data-action="new-hours">+ Registrar horas</button>
+                                <button class="btn btn-primary btn-small" data-action="new-hours">Marcar asistencia</button>
                             </div>
                         </div>
                         <div id="boardHoursBody"></div>
@@ -1021,7 +1021,7 @@
 
                         <p>
 
-                            Resumen mensual individual de cada colaborador.
+                            Elige un colaborador y marca los días que asistió. Cada día cuenta como 10 horas hombre.
 
                         </p>
 
@@ -1043,6 +1043,8 @@
 
 
 
+                        <select id="attendanceWorker" aria-label="Colaborador para marcar asistencia"></select>
+
                         <button
 
                             class="btn btn-primary"
@@ -1051,7 +1053,7 @@
 
                         >
 
-                            + Registrar asistencia
+                            Ver calendario
 
                         </button>
 
@@ -1066,6 +1068,8 @@
 
 
 
+
+                <div class="board-stats" id="attendanceTotals" aria-live="polite"></div>
 
                 <div class="table-wrap">
 
@@ -1092,6 +1096,8 @@
                             <th>Tardanzas</th>
 
                             <th>% asistencia</th>
+
+                            <th>Horas hombre</th>
 
                             <th>Acción</th>
 
@@ -2101,9 +2107,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
-<script src="metrics.js?v=20261009-epp"></script>
-<script src="reports.js"></script>
-<script src="app.js"></script>
+<script src="metrics.js?v=20261013-attendance"></script>
+<script src="reports.js?v=20261013-attendance"></script>
+<script src="app.js?v=20261013-attendance"></script>
 <script>
 (function () {
     const byId = (id) => document.getElementById(id);

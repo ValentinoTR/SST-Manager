@@ -36,7 +36,8 @@ test("el módulo exporta todas las funciones de cálculo", () => {
     [
         "eppMatrix", "insuranceTable", "trainingStats", "findingsStats",
         "inspectionsStats", "splitObservations", "attendanceByWorker",
-        "hoursByYear", "upsertHours", "ensureCollections"
+        "hoursByYear", "upsertHours", "ensureCollections", "attendanceCalendar",
+        "upsertAttendance", "workedHours", "uniqueAttendance", "registeredAttendance"
     ].forEach(name => assert.equal(typeof M[name], "function", name));
 });
 
@@ -349,6 +350,136 @@ test("attendanceByWorker: mes sin registros y estado vacío no fallan", () => {
     assert.equal(M.attendanceByWorker(state, "2026-10")[0].pct, 100);
 });
 
+test("attendanceCalendar genera los días reales de meses de 28, 29, 30 y 31 días", () => {
+    const state = { workers: [W("w1", "Dora Coronado")] };
+    for (const [month, days] of [["2026-02", 28], ["2024-02", 29], ["2026-09", 30], ["2026-05", 31]]) {
+        const calendar = M.attendanceCalendar(state, "w1", month);
+        assert.equal(calendar.length, days);
+        assert.equal(calendar[0].date, `${month}-01`);
+        assert.equal(calendar.at(-1).date, `${month}-${days}`);
+        assert.ok(calendar.every(day => day.status === null && day.eligible));
+    }
+    assert.equal(M.attendanceCalendar(state, "w1", "1900-02").length, 28);
+    assert.equal(M.attendanceCalendar(state, "w1", "2000-02").length, 29);
+});
+
+test("attendanceCalendar habilita desde el ingreso inclusive y meses posteriores", () => {
+    const state = { workers: [{ ...W("w1", "Dora Coronado"), joined: "2026-05-16" }], attendance: [] };
+    const may = M.attendanceCalendar(state, "w1", "2026-05");
+    assert.ok(may.slice(0, 15).every(day => !day.eligible));
+    assert.ok(may.slice(15).every(day => day.eligible));
+    assert.ok(M.attendanceCalendar(state, "w1", "2026-04").every(day => !day.eligible));
+    for (const month of ["06", "07", "08", "09", "10"]) {
+        assert.ok(M.attendanceCalendar(state, "w1", `2026-${month}`).every(day => day.eligible));
+    }
+    assert.equal(state.attendance.length, 0); // Mostrar el calendario no crea asistencias.
+});
+
+test("attendanceCalendar permite ingreso ausente o inválido y rechaza trabajador o mes inexistente", () => {
+    const state = { workers: [W("w1", "Ana"), { ...W("w2", "Beto"), joined: "2026-02-30" }] };
+    assert.ok(M.attendanceCalendar(state, "w1", "2026-01").every(day => day.eligible));
+    assert.ok(M.attendanceCalendar(state, "w2", "2026-01").every(day => day.eligible));
+    for (const month of ["", "2026-13", "2026-00", "2026-2", "texto", null]) {
+        assert.deepEqual(M.attendanceCalendar(state, "w1", month), []);
+    }
+    assert.deepEqual(M.attendanceCalendar(state, "no-existe", "2026-05"), []);
+    assert.deepEqual(M.attendanceCalendar({}, "w1", "2026-05"), []);
+});
+
+test("attendanceCalendar muestra la última corrección y deja los días sin asistencia pendientes", () => {
+    const state = { workers: [W("w1", "Dora")], attendance: [
+        { workerId: "w1", date: "2026-05-01", status: "Asistencia" },
+        { workerId: "w1", date: "2026-05-01", status: "Inasistencia" },
+        { workerId: "w1", date: "2026-05-02", status: "Asistencia" },
+        { workerId: "w1", date: "2026-05-02", status: null },
+        { workerId: "w2", date: "2026-05-03", status: "Asistencia" },
+        { workerId: "w1", date: "2026-05-04", status: "Tardanza" },
+        { workerId: "w1", date: "2026-05-99", status: "Asistencia" }
+    ] };
+    const calendar = M.attendanceCalendar(state, "w1", "2026-05");
+    assert.deepEqual(calendar.slice(0, 4).map(day => day.status), ["Inasistencia", null, null, "Tardanza"]);
+});
+
+test("upsertAttendance corrige todos los duplicados, conserva id y observación y no muta la lista", () => {
+    const original = [
+        { id: "a1", workerId: "w1", date: "2026-05-01", status: "Asistencia" },
+        { id: "b1", workerId: "w2", date: "2026-05-01", status: "Asistencia" },
+        { id: "a2", workerId: "w1", date: "2026-05-01", status: "Tardanza", notes: "Avisó" },
+        { id: "a3", workerId: "w1", date: "2026-05-02", status: "Asistencia" }
+    ];
+    const copy = structuredClone(original);
+    const updated = M.upsertAttendance(original, "w1", "2026-05-01", "Inasistencia", "nuevo");
+    assert.equal(updated.length, 3);
+    assert.deepEqual(updated.filter(record => record.workerId === "w1" && record.date === "2026-05-01"), [
+        { id: "a2", workerId: "w1", date: "2026-05-01", status: "Inasistencia", notes: "Avisó" }
+    ]);
+    assert.deepEqual(updated.slice(0, 2), [original[1], original[3]]);
+    assert.deepEqual(original, copy);
+    assert.equal(M.workedHours(updated), 20);
+    const withMissingId = M.upsertAttendance(original.concat({ workerId: "w1", date: "2026-05-01", status: "Descanso" }),
+        "w1", "2026-05-01", "Asistencia", "nuevo");
+    assert.equal(withMissingId.at(-1).id, "a2");
+});
+
+test("upsertAttendance agrega y desmarca días sin borrar otros trabajadores o fechas", () => {
+    const original = [{ id: "b", workerId: "w2", date: "2026-05-01", status: "Asistencia" }];
+    const added = M.upsertAttendance(original, "w1", "2026-05-01", "Asistencia", "a");
+    assert.deepEqual(added.at(-1), { id: "a", workerId: "w1", date: "2026-05-01", status: "Asistencia" });
+    assert.equal(M.workedHours(added), 20);
+    assert.deepEqual(M.upsertAttendance(added, "w1", "2026-05-01", null, "ignorado"), original);
+    assert.equal(M.workedHours(M.upsertAttendance(added, "w1", "2026-05-01", null)), 10);
+    assert.deepEqual(M.upsertAttendance(undefined, "w1", "2026-05-01", null), []);
+});
+
+test("upsertAttendance rechaza fechas inexistentes, trabajador vacío y estados desconocidos", () => {
+    for (const date of ["2026-02-29", "2026-02-30", "2026-04-31", "2026-05-00", "2026-13-01", "2026-5-1", "", null]) {
+        assert.equal(M.upsertAttendance([], "w1", date, "Asistencia", "x"), null);
+    }
+    for (const workerId of ["", " ", null, undefined]) {
+        assert.equal(M.upsertAttendance([], workerId, "2026-05-01", "Asistencia", "x"), null);
+    }
+    assert.equal(M.upsertAttendance([], "w1", "2026-05-01", "Pendiente", "x"), null);
+    assert.equal(M.upsertAttendance([], "w1", "2026-05-01", undefined, "x"), null);
+    assert.equal(M.upsertAttendance([], "w1", "2024-02-29", "Asistencia", "x")[0].date, "2024-02-29");
+});
+
+test("workedHours suma 10 por trabajador-día asistido o tardanza e ignora horas registradas", () => {
+    const records = [
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia", hours: -100 },
+        { workerId: "w1", date: "2026-09-02", status: "Tardanza", hours: 3 },
+        { workerId: "w1", date: "2026-09-03", status: "Inasistencia", hours: 100 },
+        { workerId: "w1", date: "2026-09-04", status: "Descanso" },
+        { workerId: "w2", date: "2026-09-01", status: "Asistencia" }
+    ];
+    assert.equal(M.workedHours(records), 30);
+    assert.equal(M.workedHours([]), 0);
+    assert.equal(M.workedHours(), 0);
+});
+
+test("workedHours deduplica, respeta última corrección e ignora identidad y fechas inválidas", () => {
+    const records = [
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-02", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-02", status: "Inasistencia" },
+        { workerId: "w1", date: "2026-09-03", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-03", status: null },
+        { workerId: "w1", date: "2026-09-31", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-04T00:00:00Z", status: "Asistencia" },
+        { date: "2026-09-04", status: "Asistencia" },
+        { workerId: "", date: "2026-09-04", status: "Asistencia" },
+        null
+    ];
+    assert.equal(M.workedHours(records), 10);
+    assert.equal(M.uniqueAttendance(records).length, 3);
+    assert.equal(M.registeredAttendance(records).length, 2);
+    assert.deepEqual(M.attendanceSummary(records), { days: 2, attendance: 1, absences: 1, late: 0, pct: 50 });
+    assert.deepEqual(M.attendanceByWorker({ workers: [W("w1", "Dora")], attendance: records }, "2026-09")[0], {
+        worker: W("w1", "Dora"), days: 2, attendance: 1, absences: 1, late: 0, pct: 50
+    });
+});
+
 /* ---------- Cambio 11: horas trabajadas por mes ---------- */
 
 const HOURS = () => ([
@@ -377,6 +508,73 @@ test("hoursByYear: sin datos todo es cero y un mes con 0 horas cuenta como regis
     assert.deepEqual([empty.total, empty.registeredMonths], [0, 0]);
     const zero = M.hoursByYear({ hours: [{ month: "2026-02", hours: 0 }] }, "2026");
     assert.deepEqual([zero.months[1].registered, zero.months[1].hours, zero.registeredMonths], [true, 0, 1]);
+});
+
+test("hoursByYear reemplaza horas manuales del mismo mes por asistencia y conserva historial de otros meses", () => {
+    const state = { hours: HOURS(), attendance: [
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { workerId: "w2", date: "2026-09-01", status: "Tardanza" },
+        { workerId: "w1", date: "2026-09-02", status: "Inasistencia" },
+        { workerId: "w1", date: "2025-12-02", status: "Asistencia" }
+    ] };
+    const r = M.hoursByYear(state, "2026");
+    assert.deepEqual([r.months[8].hours, r.months[8].source], [20, "attendance"]);
+    assert.deepEqual([r.months[9].hours, r.months[9].source], [13000, "manual"]);
+    assert.deepEqual([r.months[0].hours, r.months[0].source, r.months[0].registered], [null, null, false]);
+    assert.equal(r.total, 13020);
+    assert.equal(r.registeredMonths, 2);
+    assert.equal(M.hoursByYear(state, "2025").total, 10);
+    assert.equal(state.hours[3].hours, 12600);
+});
+
+test("hoursByYear registra cero para meses con inasistencia o descanso y no restaura un total manual", () => {
+    let state = { hours: [{ month: "2026-09", hours: 10000 }], attendance: [] };
+    state.attendance = M.upsertAttendance(state.attendance, "w1", "2026-09-01", "Asistencia", "a");
+    assert.equal(M.hoursByYear(state, "2026").total, 10);
+    state.attendance = M.upsertAttendance(state.attendance, "w1", "2026-09-01", "Inasistencia", "b");
+    let r = M.hoursByYear(state, "2026");
+    assert.deepEqual([r.months[8].hours, r.months[8].source, r.months[8].registered, r.total], [0, "attendance", true, 0]);
+    state.attendance = M.upsertAttendance(state.attendance, "w1", "2026-09-01", "Descanso", "b");
+    r = M.hoursByYear(state, "2026");
+    assert.equal(r.total, 0);
+    assert.equal(r.registeredMonths, 1);
+});
+
+test("hoursByYear ignora fechas inválidas y estados nulos al determinar meses automáticos", () => {
+    const r = M.hoursByYear({ hours: [{ month: "2026-02", hours: 400 }], attendance: [
+        { workerId: "w1", date: "2026-02-29", status: "Asistencia" },
+        { workerId: "w1", date: "2026-02-01", status: null },
+        { date: "2026-02-02", status: "Asistencia" },
+        { workerId: "w1", date: "2026-02-03", status: "Pendiente" }
+    ] }, "2026");
+    assert.deepEqual([r.months[1].hours, r.months[1].source, r.total], [400, "manual", 400]);
+});
+
+test("1000 asistencias únicas producen 10000 horas hombre en septiembre", () => {
+    const records = Array.from({ length: 1000 }, (_, i) => ({
+        workerId: `w${Math.floor(i / 25)}`,
+        date: `2026-09-${String(i % 25 + 1).padStart(2, "0")}`,
+        status: "Asistencia"
+    }));
+    assert.equal(M.workedHours(records), 10000);
+    const r = M.hoursByYear({ attendance: records }, "2026");
+    assert.equal(r.months[8].hours, 10000);
+    assert.equal(r.total, 10000);
+    assert.equal(r.months[8].source, "attendance");
+});
+
+test("workerProfile muestra asistencia única con la última corrección y recalcula su resumen", () => {
+    const state = { workers: [W("w1", "Dora")], attendance: [
+        { id: "a", workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { id: "b", workerId: "w1", date: "2026-09-01", status: "Inasistencia" },
+        { id: "c", workerId: "w1", date: "2026-09-02", status: "Tardanza" },
+        { id: "d", workerId: "w1", date: "2026-09-03", status: null }
+    ] };
+    const profile = M.workerProfile(state, "w1", TODAY);
+    assert.deepEqual(profile.attendance.map(record => record.id), ["c", "b"]);
+    assert.deepEqual(profile.attendanceSummary, { days: 2, attendance: 0, absences: 1, late: 1, pct: 50 });
+    assert.equal(M.workedHours(profile.attendance), 10);
 });
 
 test("upsertHours agrega un mes nuevo o corrige uno existente sin mutar la lista original", () => {
@@ -514,7 +712,7 @@ test("kpiGauges: charlas por encima de la meta pasan de 100 %", () => {
 test("kpiTiles: números de las fichas", () => {
     const tiles = Object.fromEntries(M.kpiTiles(BOARD_STATE(), "2026-10").map(t => [t.key, t]));
     assert.equal(tiles.workers.value, 2);
-    assert.equal(tiles.hours.value, 25500);
+    assert.equal(tiles.hours.value, 12530); // Septiembre histórico + 3 días asistidos de octubre x 10 horas.
     assert.equal(tiles.hours.sub, "2/12 meses registrados");
     assert.equal(tiles.training.value, 2);
     assert.equal(tiles.training.sub, "Meta: 4");
@@ -524,6 +722,18 @@ test("kpiTiles: números de las fichas", () => {
     assert.equal(tiles.inspections.sub, "3 observaciones");
     assert.equal(tiles.pending.value, 3);       // 2 observaciones abiertas + 1 hallazgo abierto
     assert.equal(M.kpiTiles({}, "2026-10")[2].sub, "Sin meta definida");
+});
+
+test("kpiTiles actualiza las horas acumuladas al corregir una asistencia", () => {
+    const state = { hours: [{ month: "2026-09", hours: 10000 }], attendance: [
+        { workerId: "w1", date: "2026-09-01", status: "Asistencia" },
+        { workerId: "w2", date: "2026-09-01", status: "Tardanza" }
+    ] };
+    const hoursTile = () => M.kpiTiles(state, "2026-09").find(item => item.key === "hours");
+    assert.equal(hoursTile().value, 20);
+    state.attendance = M.upsertAttendance(state.attendance, "w1", "2026-09-01", "Inasistencia", "a");
+    assert.equal(hoursTile().value, 10);
+    assert.equal(hoursTile().sub, "1/12 meses registrados");
 });
 
 test("pendingActions: solo lo abierto, lo más antiguo primero, con días abiertos", () => {

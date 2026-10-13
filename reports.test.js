@@ -156,3 +156,121 @@ test("fileName arma un nombre de archivo seguro", () => {
     const report = R.buildReport(state, { type: "trabajador", workerId: "a" }, TODAY);
     assert.equal(R.fileName(report, "xlsx"), "reporte_sst_trabajador_ana.xlsx");
 });
+
+function hoursState() {
+    return {
+        ...JSON.parse(JSON.stringify(state)),
+        hours: [{ month: "2026-09", hours: 10000 }],
+        attendance: [
+            { workerId: "a", date: "2025-12-31", status: "Asistencia" },
+            { workerId: "a", date: "2026-09-01", status: "Asistencia" },
+            { workerId: "a", date: "2026-09-01", status: "Tardanza" },
+            { workerId: "a", date: "2026-09-02", status: "Asistencia" },
+            { workerId: "a", date: "2026-09-02", status: "Inasistencia" },
+            { workerId: "a", date: "2026-09-03", status: "Descanso" },
+            { workerId: "b", date: "2026-09-01", status: "Asistencia" },
+            { workerId: "a", date: "2026-10-01", status: "Asistencia" },
+            { workerId: "b", date: "2026-10-02", status: "Tardanza" },
+            { workerId: "a", date: "2026-09-31", status: "Asistencia" },
+            { workerId: "desconocido", date: "2026-09-04", status: "Asistencia" }
+        ]
+    };
+}
+
+test("horas hombre mensuales cuentan 10 horas por trabajador-día sin sumar el historial manual", () => {
+    const report = R.buildReport(hoursState(), { type: "mensual", month: "2026-09" }, TODAY);
+    assert.equal(value(report, "Horas hombre trabajadas"), 20);
+    assert.deepEqual(section(report, "horas_hombre").columns, ["Mes", "Días trabajados", "Horas hombre"]);
+    assert.deepEqual(section(report, "horas_hombre").rows, [["Septiembre 2026", 2, 20]]);
+    assert.deepEqual(section(report, "asistencia").rows, [
+        ["Ana", 2, 0, 1, 1, "50%", 10],
+        ["Beto", 1, 1, 0, 0, "100%", 10]
+    ]);
+    assert.equal(section(report, "asistencia").columns[6], "Horas hombre");
+});
+
+test("horas hombre anuales agrupan las asistencias por mes y excluyen otros años", () => {
+    const report = R.buildReport(hoursState(), { type: "anual", year: "2026" }, TODAY);
+    const rows = section(report, "horas_hombre").rows;
+    assert.equal(value(report, "Horas hombre trabajadas"), 40);
+    assert.equal(rows.length, 12);
+    assert.deepEqual(rows[8], ["Septiembre 2026", 2, 20]);
+    assert.deepEqual(rows[9], ["Octubre 2026", 2, 20]);
+    assert.deepEqual(rows[0], ["Enero 2026", 0, 0]);
+    assert.equal(rows.reduce((total, row) => total + row[2], 0), 40);
+});
+
+test("horas hombre por trabajador y por área conservan el alcance escogido", () => {
+    const records = hoursState();
+    const worker = R.buildReport(records, { type: "trabajador", workerId: "a" }, TODAY);
+    const area = R.buildReport(records, { type: "area", area: "oficina" }, TODAY);
+    assert.equal(value(worker, "Horas hombre trabajadas"), 30);
+    assert.deepEqual(section(worker, "horas_hombre").rows, [
+        ["Diciembre 2025", 1, 10], ["Septiembre 2026", 1, 10], ["Octubre 2026", 1, 10]
+    ]);
+    assert.equal(value(area, "Horas hombre trabajadas"), 20);
+    assert.deepEqual(section(area, "horas_hombre").rows, [
+        ["Septiembre 2026", 1, 10], ["Octubre 2026", 1, 10]
+    ]);
+});
+
+test("corregir una asistencia a inasistencia reduce las horas sin duplicar el día", () => {
+    const records = hoursState();
+    const options = { type: "mensual", month: "2026-09" };
+    assert.equal(value(R.buildReport(records, options, TODAY), "Horas hombre trabajadas"), 20);
+    records.attendance.push({ workerId: "b", date: "2026-09-01", status: "Inasistencia" });
+    const corrected = R.buildReport(records, options, TODAY);
+    assert.equal(value(corrected, "Horas hombre trabajadas"), 10);
+    assert.deepEqual(section(corrected, "horas_hombre").rows, [["Septiembre 2026", 1, 10]]);
+    assert.deepEqual(section(corrected, "asistencia").rows[1], ["Beto", 1, 0, 1, 0, "0%", 0]);
+});
+
+test("inasistencias, descansos y meses sin asistencias producen cero horas hombre", () => {
+    const records = hoursState();
+    records.attendance = [
+        { workerId: "a", date: "2026-09-01", status: "Inasistencia" },
+        { workerId: "a", date: "2026-09-02", status: "Descanso" }
+    ];
+    for (const month of ["2026-09", "2026-10"]) {
+        const report = R.buildReport(records, { type: "mensual", month }, TODAY);
+        assert.equal(value(report, "Horas hombre trabajadas"), 0);
+        assert.equal(section(report, "horas_hombre").rows[0][2], 0);
+    }
+});
+
+function xlsxFiles(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const decoder = new TextDecoder();
+    const files = new Map();
+    let offset = 0;
+    while (view.getUint32(offset, true) === 0x04034B50) {
+        const size = view.getUint32(offset + 18, true);
+        const nameLength = view.getUint16(offset + 26, true);
+        const extraLength = view.getUint16(offset + 28, true);
+        const nameStart = offset + 30;
+        const dataStart = nameStart + nameLength + extraLength;
+        files.set(
+            decoder.decode(bytes.subarray(nameStart, nameStart + nameLength)),
+            decoder.decode(bytes.subarray(dataStart, dataStart + size))
+        );
+        offset = dataStart + size;
+    }
+    return files;
+}
+
+test("HTML y Excel exportan las horas hombre calculadas y el detalle mensual", () => {
+    const report = R.buildReport(hoursState(), { type: "mensual", month: "2026-09" }, TODAY);
+    const html = R.toHtml(report);
+    assert.match(html, /<strong>20<\/strong>\s*<span>Horas hombre trabajadas<\/span>/);
+    assert.match(html, /<th>Horas hombre<\/th>/);
+    assert.match(html, /<td>Septiembre 2026<\/td><td>2<\/td><td>20<\/td>/);
+    const files = xlsxFiles(R.toXlsx(report));
+    assert.match(files.get("xl/workbook.xml"), /name="Horas hombre trabajadas"/);
+    assert.match(files.get("xl/worksheets/sheet1.xml"), /Horas hombre trabajadas/);
+    const sheetIndex = report.sections.findIndex(item => item.key === "horas_hombre") + 2;
+    const hoursSheet = files.get(`xl/worksheets/sheet${sheetIndex}.xml`);
+    assert.match(hoursSheet, /Horas hombre/);
+    assert.match(hoursSheet, /Septiembre 2026/);
+    assert.match(hoursSheet, /<c r="B2"><v>2<\/v><\/c>/);
+    assert.match(hoursSheet, /<c r="C2"><v>20<\/v><\/c>/);
+});

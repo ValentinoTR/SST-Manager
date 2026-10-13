@@ -99,3 +99,40 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
     outline-color: #0642b0;
 }
+
+/* Calendario mensual de asistencia por colaborador. */
+.attendance-calendar { margin-bottom: 18px; }
+.attendance-calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.attendance-calendar-toolbar h3 { margin: 0 0 6px; }
+.attendance-calendar-toolbar p, .attendance-calendar-note { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.attendance-calendar-toolbar p { margin: 0; }
+.attendance-month-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.attendance-month-label input { min-height: 40px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--text); }
+.attendance-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.attendance-weekday { text-align: center; padding: 8px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.attendance-day { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; cursor: pointer; }
+.attendance-day-number { font-weight: 750; font-size: 18px; }
+.attendance-day input[type="checkbox"] { position: absolute; top: 12px; right: 10px; width: 20px; height: 20px; min-height: 0; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.attendance-day-status { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.attendance-day-hours { font-size: 12px; font-weight: 700; }
+.attendance-day.is-present { border-color: var(--primary); background: var(--primary-light); }
+.attendance-day.is-present .attendance-day-hours { color: var(--primary); }
+.attendance-day:focus-within { outline: 3px solid var(--primary); outline-offset: 2px; }
+.attendance-day.is-disabled { background: var(--background); color: var(--muted); cursor: default; }
+.attendance-day.is-disabled input { cursor: default; }
+#attendanceTotals { margin: 0 0 18px; }
+#attendanceWorker { max-width: 260px; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--text); }
+@media (max-width: 600px) {
+    .attendance-calendar-grid { gap: 4px; }
+    .attendance-day { padding: 6px 4px; gap: 6px; padding-top: 32px; }
+    .attendance-day-number { font-size: 16px; }
+    .attendance-day input[type="checkbox"] { top: 7px; right: 5px; width: 20px; height: 20px; }
+    .attendance-day-status, .attendance-day-hours { font-size: 10px; }
+    .attendance-calendar-toolbar .toolbar { width: 100%; justify-content: space-between; }
+    #attendanceWorker { max-width: 100%; }
+}
+.attendance-day-note { font-size: 11px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+    .attendance-day-note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}

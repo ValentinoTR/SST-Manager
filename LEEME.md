@@ -21,6 +21,16 @@ El logo se llama exactamente `relieper.webp` y debe mantenerse en la raíz, junt
 
 Al actualizar, publica juntos `relieper.webp`, `index.html`, `app.js`, `cloud.js`, `supabase-config.js`, `supabase-schema.sql`, `styles.css`, `metrics.js`, `reports.js`, `workspace.css` y `workspace.js`.
 
+## Asistencia y horas hombre
+
+En **Asistencia**, elige el mes y el colaborador, y abre **Ver calendario**. También puedes abrir la pestaña **Asistencia** en su ficha. Los días aparecen automáticamente según el mes y su fecha de ingreso; no es necesario crear un registro por día. Los días anteriores al ingreso están deshabilitados.
+
+Marca los días que asistió. Cada asistencia o tardanza suma **10 horas hombre**; las inasistencias, los descansos y los días sin marcar suman cero. Quitar un check registra una inasistencia. Los cambios se guardan automáticamente y actualizan los totales del mes y del año. **Estado u observación** permite registrar una tardanza, descanso o nota sin duplicar el mismo día.
+
+Los reportes mensual, anual, por persona y por área incluyen horas hombre por colaborador y un desglose por mes, también en PDF y Excel. Por ejemplo, 1 000 días trabajados entre todos los colaboradores equivalen a 10 000 horas hombre.
+
+El tablero conserva los totales manuales antiguos de meses sin registros diarios. En cuanto se registra asistencia de un mes, muestra el cálculo de sus días y no suma el total manual anterior. Los reportes calculan las horas únicamente a partir de los registros diarios.
+
 ## Respaldos
 
 En **Respaldos**, descarga el respaldo completo antes de restaurar o cambiar de instancia. Incluye registros y evidencias, así que guárdalo en un lugar privado. La restauración reemplaza los registros actuales, conserva una copia previa y sincroniza el resultado con Supabase.

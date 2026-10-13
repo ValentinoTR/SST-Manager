@@ -112,6 +112,7 @@ function saveState() {
     }
 
     renderAll();
+    refreshCurrentReport();
     window.SSTCloud?.queueStateSync(state);
 
 }
@@ -1721,15 +1722,23 @@ function openAttendanceModal(
     }
 
 
+    const worker = getWorker(workerId);
+    let date = today();
+    if (workerId === profileWorkerId && profileTab === "asistencia" && profileAttendanceMonth !== currentMonth()) {
+        date = `${profileAttendanceMonth}-01`;
+        if (SSTMetrics.validAttendanceDate(worker?.joined) && worker.joined.slice(0, 7) === profileAttendanceMonth) date = worker.joined;
+    }
+    const previous = SSTMetrics.registeredAttendance(state.attendance).find(record => record.workerId === workerId && record.date === date);
     openModal({
 
         title:
-            "Registrar asistencia",
+            "Estado u observación de asistencia",
 
         values: {
             workerId,
-            date: today(),
-            status: "Asistencia"
+            date,
+            status: previous?.status || "Asistencia",
+            note: previous?.note || ""
         },
 
         fields: [
@@ -1740,7 +1749,7 @@ function openAttendanceModal(
                 type: "select",
                 required: true,
                 full: true,
-                options: workerOptions()
+                options: state.workers.filter(item => item.status === "Activo" || item.id === workerId).map(item => ({ value: item.id, label: item.name }))
             },
 
             {
@@ -1776,13 +1785,22 @@ function openAttendanceModal(
 
         onSubmit(data) {
 
-            state.attendance.push({
-
-                id: createId(),
-
-                ...data
-
-            });
+            const worker = getWorker(data.workerId);
+            if (!worker) {
+                showToast("Elige un colaborador válido.");
+                return;
+            }
+            if (SSTMetrics.validAttendanceDate(worker.joined) && data.date < worker.joined) {
+                showToast("La asistencia debe ser desde la fecha de ingreso.");
+                return;
+            }
+            const updated = SSTMetrics.upsertAttendance(state.attendance, data.workerId, data.date, data.status, createId());
+            if (!updated) {
+                showToast("Elige una fecha y un estado válidos.");
+                return;
+            }
+            state.attendance = updated.map(record => record.workerId === data.workerId && record.date === data.date
+                ? { ...record, note: data.note } : record);
 
 
             saveState();
@@ -1800,188 +1818,49 @@ function openAttendanceModal(
 }
 
 
+function openAttendanceCalendar(workerId = "", month = currentMonth()) {
+    if (state.workers.length === 0) {
+        showToast("Primero registra un colaborador.");
+        return;
+    }
+    if (workerId) {
+        openProfile(workerId, "asistencia", month);
+        return;
+    }
+    document.getElementById("attendanceMonth").value = month;
+    renderAttendance();
+    openPage("asistencia");
+    document.getElementById("attendanceWorker").focus();
+}
+
 function renderAttendance() {
-
-    const tbody =
-        document.getElementById(
-            "attendanceTbody"
-        );
-
-    const month =
-        document.getElementById(
-            "attendanceMonth"
-        ).value;
-
-
-    const activeWorkers =
-        state.workers.filter(
-            worker =>
-                worker.status ===
-                "Activo"
-        );
-
-
-    tbody.innerHTML =
-        activeWorkers
-            .map(worker => {
-
-                const records =
-                    state.attendance.filter(
-                        record =>
-                            record.workerId ===
-                                worker.id &&
-                            record.date
-                                .startsWith(month)
-                    );
-
-
-                const workRecords =
-                    records.filter(
-                        record =>
-                            record.status !==
-                            "Descanso"
-                    );
-
-
-                const attendance =
-                    records.filter(
-                        record =>
-                            record.status ===
-                            "Asistencia"
-                    ).length;
-
-
-                const absences =
-                    records.filter(
-                        record =>
-                            record.status ===
-                            "Inasistencia"
-                    ).length;
-
-
-                const late =
-                    records.filter(
-                        record =>
-                            record.status ===
-                            "Tardanza"
-                    ).length;
-
-
-                const present =
-                    attendance + late;
-
-
-                const percentage =
-                    workRecords.length
-                        ? Math.round(
-                            present /
-                            workRecords.length *
-                            100
-                        )
-                        : 0;
-
-
-                let badgeClass =
-                    "badge-gray";
-
-
-                if (
-                    workRecords.length
-                ) {
-
-                    if (
-                        percentage >= 95
-                    ) {
-
-                        badgeClass =
-                            "badge-green";
-
-                    } else if (
-                        percentage >= 85
-                    ) {
-
-                        badgeClass =
-                            "badge-yellow";
-
-                    } else {
-
-                        badgeClass =
-                            "badge-red";
-
-                    }
-
-                }
-
-
-                return `
-
-                    <tr>
-
-                        <td>
-
-                            <div class="worker-cell">
-
-                                <div class="avatar">
-                                    ${initials(worker.name)}
-                                </div>
-
-                                <strong>
-                                    ${escapeHtml(worker.name)}
-                                </strong>
-
-                            </div>
-
-                        </td>
-
-                        <td>
-                            ${workRecords.length}
-                        </td>
-
-                        <td>
-                            ${attendance}
-                        </td>
-
-                        <td>
-                            ${absences}
-                        </td>
-
-                        <td>
-                            ${late}
-                        </td>
-
-                        <td>
-
-                            <span
-                                class="badge ${badgeClass}"
-                            >
-                                ${
-                                    workRecords.length
-                                        ? `${percentage}%`
-                                        : "Sin registros"
-                                }
-                            </span>
-
-                        </td>
-
-                        <td>
-
-                            <button
-                                class="btn btn-light btn-small"
-                                data-action="attendance-worker"
-                                data-id="${worker.id}"
-                            >
-                                + Registrar
-                            </button>
-
-                        </td>
-
-                    </tr>
-
-                `;
-
-            })
-            .join("");
-
+    const month = document.getElementById("attendanceMonth").value || currentMonth();
+    const workers = [...state.workers].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    fillSelect("attendanceWorker", [
+        { value: "", label: "Elige un colaborador" },
+        ...workers.map(worker => ({ value: worker.id, label: worker.name }))
+    ]);
+    const rows = SSTMetrics.attendanceByWorker(state, month);
+    const ids = new Set(workers.map(worker => worker.id));
+    const records = state.attendance.filter(record => ids.has(record.workerId) && String(record.date).startsWith(month));
+    const hours = SSTMetrics.workedHours(records);
+    document.getElementById("attendanceTotals").innerHTML = `
+        ${statBox(formatNumber(hours), "Horas hombre del mes")}
+        ${statBox(hours / 10, "Días trabajados del equipo")}
+        ${statBox("10 h", "Por persona y día asistido")}
+    `;
+    document.getElementById("attendanceTbody").innerHTML = rows.map(row => `
+        <tr>
+            <td><div class="worker-cell"><div class="avatar">${escapeHtml(initials(row.worker.name))}</div><strong>${escapeHtml(row.worker.name)}</strong></div></td>
+            <td>${row.days}</td>
+            <td>${row.attendance}</td>
+            <td>${row.absences}</td>
+            <td>${row.late}</td>
+            <td>${attendanceBadge(row.pct)}</td>
+            <td>${formatNumber(SSTMetrics.workedHours(records.filter(record => record.workerId === row.worker.id)))}</td>
+            <td><button class="btn btn-light btn-small" data-action="attendance-worker" data-id="${escapeHtml(row.worker.id)}">Ver calendario</button></td>
+        </tr>
+    `).join("") || '<tr><td colspan="8">No hay colaboradores activos. Registra un colaborador para marcar su asistencia.</td></tr>';
 }
 
 
@@ -2974,7 +2853,7 @@ function renderDashboard() {
 
 
     const attendanceRecords =
-        state.attendance.filter(
+        SSTMetrics.registeredAttendance(state.attendance).filter(
             record =>
                 record.date.startsWith(month) &&
                 record.status !== "Descanso"
@@ -4785,7 +4664,7 @@ function renderBoardHours() {
 
             const title =
                 item.registered
-                    ? `${item.label} ${year}: ${formatNumber(item.hours)} horas`
+                    ? `${item.label} ${year}: ${formatNumber(item.hours)} horas hombre${item.source === "manual" ? " (histórico manual)" : ""}`
                     : `${item.label} ${year}: sin registro`;
 
             return `
@@ -4815,7 +4694,7 @@ function renderBoardHours() {
     setBoard("boardHoursBody", `
 
         <div class="board-stats">
-            ${statBox(formatNumber(data.total), `Horas acumuladas ${year}`)}
+            ${statBox(formatNumber(data.total), `Horas hombre acumuladas ${year}`)}
             ${statBox(`${data.registeredMonths}/12`, "Meses registrados")}
             ${statBox(average, "Promedio por mes")}
         </div>
@@ -4828,8 +4707,9 @@ function renderBoardHours() {
                 </div>
             </div>
 
+            <p class="goal-note">Cada asistencia o tardanza aporta 10 horas hombre. ${data.months.some(item => item.source === "manual") ? "Los meses sin asistencia registrada conservan sus totales históricos manuales; al registrar días, se calculan automáticamente." : "Los totales se actualizan al marcar o desmarcar días."}</p>
             ${data.registeredMonths === 0
-                ? `<p class="goal-note">Aún no registras horas en ${year}. Usa «+ Registrar horas».</p>`
+                ? `<p class="goal-note">Marca los días asistidos en el calendario de cada colaborador para calcular las horas hombre.</p>`
                 : ""}
 
         </div>
@@ -5109,6 +4989,8 @@ let profileWorkerId = null;
 
 let profileTab = "epp";
 
+let profileAttendanceMonth = currentMonth();
+
 
 const PROFILE_TABS = [
     { key: "epp",            label: "EPP" },
@@ -5173,7 +5055,7 @@ function complianceHtml(compliance) {
 }
 
 
-function openProfile(workerId, tab = "epp") {
+function openProfile(workerId, tab = "epp", month = currentMonth()) {
 
     if (!getWorker(workerId)) {
         return;
@@ -5182,6 +5064,7 @@ function openProfile(workerId, tab = "epp") {
     profileWorkerId = workerId;
 
     profileTab = tab;
+    profileAttendanceMonth = month;
 
     renderProfile();
 
@@ -5229,10 +5112,104 @@ function statusBadge(status) {
 }
 
 
+function adjacentAttendanceMonth(month, offset) {
+    const [year, number] = month.split("-").map(Number);
+    const date = new Date(Date.UTC(year, number - 1 + offset, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function attendanceCalendarHtml(worker) {
+    const month = profileAttendanceMonth;
+    const days = SSTMetrics.attendanceCalendar(state, worker.id, month);
+    const records = state.attendance.filter(record => record.workerId === worker.id && String(record.date).startsWith(month));
+    const hours = SSTMetrics.workedHours(records);
+    const byDate = new Map(SSTMetrics.registeredAttendance(records).map(record => [record.date, record]));
+    const eligible = days.filter(day => day.eligible).length;
+    const weekday = (new Date(`${month}-01T12:00:00Z`).getUTCDay() + 6) % 7;
+    const joinedMonth = SSTMetrics.validAttendanceDate(worker.joined) ? worker.joined.slice(0, 7) : "";
+    return `
+        <section class="attendance-calendar" aria-label="Calendario de asistencia de ${escapeHtml(worker.name)}">
+            <div class="attendance-calendar-toolbar">
+                <div><h3>Asistencia · ${escapeHtml(monthTitle(month))}</h3>
+                    <p>Ingreso: ${formatDate(worker.joined)}. Marca los días que asistió: cada día suma 10 horas hombre.</p></div>
+                <div class="toolbar">
+                    <button type="button" class="btn btn-light btn-small" data-action="attendance-month-prev" aria-label="Mes anterior" ${joinedMonth && month <= joinedMonth ? "disabled" : ""}>←</button>
+                    <label class="attendance-month-label">Mes de asistencia<input type="month" id="profileAttendanceMonth" value="${escapeHtml(month)}" ${joinedMonth ? `min="${joinedMonth}"` : ""}></label>
+                    <button type="button" class="btn btn-light btn-small" data-action="attendance-month-next" aria-label="Mes siguiente">→</button>
+                </div>
+            </div>
+            <div class="board-stats">
+                ${statBox(eligible, "Días disponibles desde el ingreso")}
+                ${statBox(hours / 10, "Días trabajados este mes", "good")}
+                ${statBox(formatNumber(hours), "Horas hombre del mes")}
+            </div>
+            <div class="attendance-calendar-grid">
+                ${["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(day => `<span class="attendance-weekday" aria-hidden="true">${day}</span>`).join("")}
+                ${'<span class="attendance-day-empty" aria-hidden="true"></span>'.repeat(weekday)}
+                ${days.map(day => {
+                    const present = day.status === "Asistencia" || day.status === "Tardanza";
+                    const status = day.eligible ? (day.status || "Sin marcar") : "Antes del ingreso";
+                    const note = byDate.get(day.date)?.note || "";
+                    return `<label class="attendance-day ${present ? "is-present" : ""} ${day.eligible ? "" : "is-disabled"}">
+                        <span class="attendance-day-number">${Number(day.date.slice(8))}</span>
+                        <input type="checkbox" data-attendance-date="${day.date}" data-worker-id="${escapeHtml(worker.id)}" aria-label="Asistió el ${formatDate(day.date)}" aria-describedby="attendance-status-${day.date} attendance-hours-${day.date}${note ? ` attendance-note-${day.date}` : ""}" ${present ? "checked" : ""} ${day.eligible ? "" : "disabled"}>
+                        <span class="attendance-day-status" id="attendance-status-${day.date}">${escapeHtml(status)}</span>
+                        <span class="attendance-day-hours" id="attendance-hours-${day.date}">${present ? "10 h" : "0 h"}</span>
+                        ${note ? `<span class="attendance-day-note" id="attendance-note-${day.date}" title="${escapeHtml(note)}">Nota: ${escapeHtml(note)}</span>` : ""}
+                    </label>`;
+                }).join("")}
+            </div>
+            <p class="attendance-calendar-note">Las tardanzas también cuentan como día trabajado. Los días sin marcar, las inasistencias y los descansos suman 0 horas. Al quitar un check, el día queda como inasistencia.</p>
+        </section>`;
+}
+
+function setAttendanceCalendarMonth(month) {
+    if (!SSTMetrics.attendanceCalendar(state, profileWorkerId, month).length) {
+        const input = document.getElementById("profileAttendanceMonth");
+        if (input) input.value = profileAttendanceMonth;
+        return;
+    }
+    profileAttendanceMonth = month;
+    renderProfile();
+}
+
+function focusAttendanceMonthControl(action) {
+    const button = document.querySelector(`[data-action="${action}"]`);
+    if (button && !button.disabled) button.focus();
+    else document.getElementById("profileAttendanceMonth")?.focus();
+}
+
+document.addEventListener("change", event => {
+    if (event.target.form === modalForm && modalTitle.textContent === "Estado u observación de asistencia" && ["workerId", "date"].includes(event.target.name)) {
+        const workerId = modalForm.elements.namedItem("workerId").value;
+        const date = modalForm.elements.namedItem("date").value;
+        const previous = SSTMetrics.registeredAttendance(state.attendance).find(record => record.workerId === workerId && record.date === date);
+        modalForm.elements.namedItem("status").value = previous?.status || "Asistencia";
+        modalForm.elements.namedItem("note").value = previous?.note || "";
+        return;
+    }
+    if (event.target.id === "profileAttendanceMonth") {
+        setAttendanceCalendarMonth(event.target.value);
+        document.getElementById("profileAttendanceMonth")?.focus();
+        return;
+    }
+    const checkbox = event.target.closest("[data-attendance-date]");
+    if (!checkbox) return;
+    const worker = getWorker(checkbox.dataset.workerId);
+    const date = checkbox.dataset.attendanceDate;
+    const eligible = SSTMetrics.attendanceCalendar(state, worker?.id, date.slice(0, 7)).find(day => day.date === date)?.eligible;
+    if (!eligible) return;
+    const updated = SSTMetrics.upsertAttendance(state.attendance, worker.id, date, checkbox.checked ? "Asistencia" : "Inasistencia", createId());
+    if (!updated) return;
+    state.attendance = updated;
+    saveState();
+    document.querySelector(`[data-attendance-date="${date}"]`)?.focus();
+});
+
 function profileTabContent(profile) {
 
     const addButton = (kind, label) =>
-        profile.worker.status === "Activo"
+        (profile.worker.status === "Activo" || kind === "attendance")
             ? `
                 <button
                     class="btn btn-primary btn-small"
@@ -5324,27 +5301,8 @@ function profileTabContent(profile) {
     }
 
     if (profileTab === "asistencia") {
-
-        const summary = profile.attendanceSummary;
-
-        return `
-            <div class="board-stats">
-                ${statBox(summary.days, "Días registrados")}
-                ${statBox(summary.attendance, "Asistencias", "good")}
-                ${statBox(summary.absences, "Inasistencias", summary.absences ? "warn" : "")}
-                ${statBox(summary.late, "Tardanzas")}
-                ${statBox(summary.pct === null ? "—" : summary.pct + "%", "Asistencia")}
-            </div>
-        ` + toolbar("attendance", "Registrar asistencia", `${profile.attendance.length} registro(s)`) +
-            profileTable(
-                ["Fecha", "Estado", "Observación"],
-                profile.attendance.map(item => [
-                    formatDate(item.date),
-                    escapeHtml(item.status),
-                    escapeHtml(item.note || "—")
-                ]),
-                "Este colaborador aún no tiene asistencia registrada."
-            );
+        return attendanceCalendarHtml(profile.worker) +
+            toolbar("attendance", "Estado u observación", "Los cambios se guardan al marcar cada día.");
     }
 
     if (profileTab === "area") {
@@ -7506,6 +7464,8 @@ let reportType = "mensual";
 
 let currentReport = null;
 
+let currentReportOptions = null;
+
 
 function distinctAreas() {
 
@@ -7605,6 +7565,13 @@ function renderReportControls() {
 }
 
 
+function refreshCurrentReport() {
+    if (!currentReportOptions) return;
+    currentReport = SSTReports.buildReport(state, currentReportOptions, today());
+    document.getElementById("reportTitle").textContent = currentReport.scopeLabel;
+    document.getElementById("reportPreview").srcdoc = SSTReports.toHtml(currentReport);
+}
+
 function generateReport() {
 
     const options = {
@@ -7639,6 +7606,7 @@ function generateReport() {
 
     }
 
+    currentReportOptions = { ...options };
     currentReport =
         SSTReports.buildReport(state, options, today());
 
@@ -7804,7 +7772,7 @@ document.addEventListener(
 
             case "new-attendance":
 
-                openAttendanceModal();
+                openAttendanceCalendar("", boardMonth());
 
                 break;
 
@@ -8320,10 +8288,20 @@ document.addEventListener(
 
             case "new-hours":
 
-                openHoursModal();
+                openAttendanceCalendar("", boardMonth());
 
                 break;
 
+
+            case "attendance-month-prev":
+                setAttendanceCalendarMonth(adjacentAttendanceMonth(profileAttendanceMonth, -1));
+                focusAttendanceMonthControl("attendance-month-prev");
+                break;
+
+            case "attendance-month-next":
+                setAttendanceCalendarMonth(adjacentAttendanceMonth(profileAttendanceMonth, 1));
+                focusAttendanceMonthControl("attendance-month-next");
+                break;
 
             case "filter-year":
 
@@ -8341,7 +8319,7 @@ document.addEventListener(
 
             case "attendance-worker":
 
-                openAttendanceModal(id);
+                openAttendanceCalendar(id, document.getElementById("attendanceMonth").value || currentMonth());
 
                 break;
 
@@ -8425,7 +8403,15 @@ document
     )
     .addEventListener(
         "click",
-        () => openAttendanceModal()
+        () => {
+            const workerId = document.getElementById("attendanceWorker").value;
+            if (!workerId) {
+                showToast("Elige un colaborador para abrir su calendario.");
+                document.getElementById("attendanceWorker").focus();
+                return;
+            }
+            openAttendanceCalendar(workerId, document.getElementById("attendanceMonth").value || currentMonth());
+        }
     );
 
 

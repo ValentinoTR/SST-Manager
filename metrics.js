@@ -480,11 +480,116 @@
        Mismo criterio que la página Asistencia.
        --------------------------------------------------------- */
 
+    const ATTENDANCE_STATUSES = ["Asistencia", "Tardanza", "Inasistencia", "Descanso"];
+    const HOURS_PER_WORKDAY = 10;
+
+    // Valida fechas civiles sin depender de la zona horaria del navegador.
+    function daysInAttendanceMonth(month) {
+
+        const match = typeof month === "string" && /^(\d{4})-(\d{2})$/.exec(month);
+
+        if (!match) {
+            return 0;
+        }
+
+        const year = Number(match[1]);
+        const number = Number(match[2]);
+
+        if (year < 1 || number < 1 || number > 12) {
+            return 0;
+        }
+
+        const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][number - 1];
+    }
+
+    function validAttendanceDate(date) {
+        return typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+            Number(date.slice(8)) >= 1 && Number(date.slice(8)) <= daysInAttendanceMonth(date.slice(0, 7));
+    }
+
+    function validAttendanceWorker(workerId) {
+        return (typeof workerId === "string" && workerId.trim() !== "") ||
+            (typeof workerId === "number" && Number.isFinite(workerId));
+    }
+
+    // Las correcciones reemplazan el estado anterior del mismo trabajador-día.
+    function uniqueAttendance(records) {
+        const byDay = new Map();
+
+        (records || []).forEach(record => {
+            if (record && validAttendanceWorker(record.workerId) && validAttendanceDate(record.date)) {
+                byDay.set(JSON.stringify([record.workerId, record.date]), record);
+            }
+        });
+
+        return Array.from(byDay.values());
+    }
+
+    function registeredAttendance(records) {
+        return uniqueAttendance(records).filter(record => ATTENDANCE_STATUSES.includes(record.status));
+    }
+
+    // Los días pendientes se muestran sin crear registros ni marcar asistencia.
+    function attendanceCalendar(state, workerId, month) {
+        const worker = (state.workers || []).find(item => item.id === workerId);
+        const days = daysInAttendanceMonth(month);
+
+        if (!worker || !days) {
+            return [];
+        }
+
+        const joined = validAttendanceDate(worker.joined) ? worker.joined : null;
+        const byDate = new Map(registeredAttendance(state.attendance).filter(record =>
+            record.workerId === workerId && record.date.slice(0, 7) === month
+        ).map(record => [record.date, record.status]));
+
+        return Array.from({ length: days }, (_, index) => {
+            const date = `${month}-${String(index + 1).padStart(2, "0")}`;
+            return { date, status: byDate.get(date) || null, eligible: !joined || date >= joined };
+        });
+    }
+
+    // null desmarca el día; los argumentos inválidos devuelven null, no una lista.
+    function upsertAttendance(list, workerId, date, status, newId) {
+
+        if (!validAttendanceWorker(workerId) || !validAttendanceDate(date) ||
+            (status !== null && !ATTENDANCE_STATUSES.includes(status))) {
+            return null;
+        }
+
+        const records = list || [];
+        const matches = record => record && record.workerId === workerId && record.date === date;
+        const matching = records.filter(matches);
+        const previous = matching.slice(-1)[0];
+        const existingId = matching.slice().reverse().find(record => record.id != null);
+        const result = records.filter(record => !matches(record));
+
+        if (status !== null) {
+            result.push(Object.assign({}, previous, {
+                id: existingId ? existingId.id : newId,
+                workerId,
+                date,
+                status
+            }));
+        }
+
+        return result;
+    }
+
+    function workedHours(records) {
+        return registeredAttendance(records).filter(record =>
+            record.status === "Asistencia" || record.status === "Tardanza"
+        ).length * HOURS_PER_WORKDAY;
+    }
+
     function attendanceByWorker(state, month) {
+
+        const attendanceRecords = registeredAttendance(state.attendance);
 
         return activeWorkers(state).map(worker => {
 
-            const records = (state.attendance || []).filter(record =>
+            const records = attendanceRecords.filter(record =>
                 record.workerId === worker.id &&
                 inMonth(record.date, month)
             );
@@ -513,21 +618,32 @@
     function hoursByYear(state, year) {
 
         const byMonth = new Map();
+        const attendanceByMonth = new Map();
 
         (state.hours || []).forEach(entry => {
             byMonth.set(entry.month, Number(entry.hours) || 0);
         });
 
+        registeredAttendance(state.attendance).forEach(record => {
+            const month = record.date.slice(0, 7);
+            const current = attendanceByMonth.get(month) || 0;
+            attendanceByMonth.set(month, current + (
+                record.status === "Asistencia" || record.status === "Tardanza" ? HOURS_PER_WORKDAY : 0
+            ));
+        });
+
         const months = MONTH_LABELS.map((label, index) => {
 
             const month = `${year}-${String(index + 1).padStart(2, "0")}`;
-            const registered = byMonth.has(month);
+            const automatic = attendanceByMonth.has(month);
+            const registered = automatic || byMonth.has(month);
 
             return {
                 month,
                 label,
                 registered,
-                hours: registered ? byMonth.get(month) : null
+                hours: automatic ? attendanceByMonth.get(month) : registered ? byMonth.get(month) : null,
+                source: automatic ? "attendance" : registered ? "manual" : null
             };
         });
 
@@ -1026,10 +1142,16 @@
 
     function attendanceSummary(records) {
 
-        const work = records.filter(record => record.status !== "Descanso");
-        const attendance = records.filter(record => record.status === "Asistencia").length;
-        const absences = records.filter(record => record.status === "Inasistencia").length;
-        const late = records.filter(record => record.status === "Tardanza").length;
+        const list = records || [];
+        // También admite las listas de estados sin identidad usadas por consumidores antiguos.
+        const hasIdentity = list.some(record => record && (record.workerId != null || record.date != null));
+        const unique = hasIdentity ? registeredAttendance(list) : list.filter(record =>
+            record && ATTENDANCE_STATUSES.includes(record.status)
+        );
+        const work = unique.filter(record => record.status !== "Descanso");
+        const attendance = unique.filter(record => record.status === "Asistencia").length;
+        const absences = unique.filter(record => record.status === "Inasistencia").length;
+        const late = unique.filter(record => record.status === "Tardanza").length;
 
         return {
             days: work.length,
@@ -1059,7 +1181,9 @@
                 .sort((a, b) =>
                     String(b.date || b.start || "").localeCompare(String(a.date || a.start || "")));
 
-        const attendance = own("attendance");
+        const attendance = registeredAttendance(state.attendance)
+            .filter(item => item.workerId === workerId)
+            .sort((a, b) => String(b.date).localeCompare(String(a.date)));
         const incidents = own("incidents");
 
         return {
@@ -1811,6 +1935,14 @@
         inspectionsStats,
         splitObservations,
         attendanceByWorker,
+        ATTENDANCE_STATUSES,
+        HOURS_PER_WORKDAY,
+        validAttendanceDate,
+        uniqueAttendance,
+        registeredAttendance,
+        attendanceCalendar,
+        upsertAttendance,
+        workedHours,
         hoursByYear,
         upsertHours,
         thresholdTone,
