@@ -1,0 +1,16 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const C=require('./safety-core.js');
+const inspection=()=>({vehicleId:'one',items:C.checklist.map(c=>({...c,status:'Conforme',note:''}))});
+const talk=()=>({date:'2026-10-31',time:'07:00',topic:'Bloqueo de energías',instructor:'Expositor',duration:5,unit:'Unidad',area:'Taller',content:'Identificar y controlar energías',evidenceRequired:false,participants:Array.from({length:20},(_,n)=>({id:String(n),dni:String(10000000+n),name:'Trabajador '+n,role:'Operador',area:'Taller',present:n<18}))});
+test('20 convocados y 18 presentes producen 2 ausentes y 90 %',()=>assert.deepEqual(C.stats(talk().participants),{total:20,present:18,absent:2,percent:90}));
+test('Sin convocados no hay división por cero',()=>assert.equal(C.stats([]).percent,0));
+test('Falla crítica no puede degradarse desde el navegador',()=>{const p=inspection();p.items[0].status='No conforme';p.items[0].critical=false;p.items[0].note='Llantas deterioradas';assert.equal(C.aptitude(p),'No apto');});
+test('Inspección conforme no cierra una falla previa',()=>assert.equal(C.aptitude(inspection(),[{resolved_at:null}]),'No apto'));
+test('Una falla levantada requiere reinspección conforme para aptitud',()=>{const p=inspection();p.items[0].status='No conforme';assert.equal(C.aptitude(p,[{resolved_at:'2026-10-31'}]),'No apto');assert.equal(C.aptitude(inspection(),[{resolved_at:'2026-10-31'}]),'Apto');});
+test('Checklist incompleto, repetido y no aplica crítico se rechazan',()=>{let p=inspection();p.items.pop();assert.throws(()=>C.validate('inspection',p));p=inspection();p.items[1]=p.items[0];assert.throws(()=>C.validate('inspection',p));p=inspection();p.items[0].status='No aplica';p.items[0].note='No verificado';assert.throws(()=>C.validate('inspection',p));});
+test('No conforme o no aplica exige observación',()=>{const p=inspection();p.items[3].status='No aplica';assert.throws(()=>C.validate('inspection',p));p.items[3].note='Equipo sin ventanas de acuerdo a estándar';assert.doesNotThrow(()=>C.validate('inspection',p));});
+test('DNI duplicado no se acepta como dos asistentes',()=>{const p=talk();p.participants[1].dni=p.participants[0].dni;assert.throws(()=>C.validate('talk',p),/único/);});
+test('Asistencia marcada no suple evidencia requerida',()=>{const p=talk();p.evidenceRequired=true;assert.throws(()=>C.validate('talk',p),/evidencia/);p.participants.forEach(x=>{if(x.present)x.evidence='Evaluación individual ref. '+x.id;});assert.doesNotThrow(()=>C.validate('talk',p));});
+test('Ausentes no reciben firma ni participación acreditada',()=>{const p=talk();p.participants[19].signature='archivo';assert.throws(()=>C.validate('talk',p));});
+test('Placas se normalizan para evitar duplicados por formato',()=>assert.equal(C.plate('abc-123'),'ABC123'));

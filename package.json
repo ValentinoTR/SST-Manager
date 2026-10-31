@@ -1,0 +1,15 @@
+{
+  "name": "sst-manager",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test safety.test.js tests/database.test.mjs tests/pdf.test.mjs tests/edge.test.mjs",
+    "test:legacy": "node --test metrics.test.js reports.test.js",
+    "preview": "node tests/serve.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
+    "pdf-lib": "1.17.1",
+    "supabase": "2.122.0"
+  }
+}

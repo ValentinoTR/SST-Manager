@@ -46,6 +46,7 @@
     }
 
     function showGate(text = "") {
+        window.dispatchEvent(new CustomEvent("sst:session", { detail: { signedIn: false } }));
         document.body.classList.add("cloud-locked");
         gate.hidden = false;
         if (text) showMessage(text);
@@ -128,6 +129,7 @@
             await loadOrCreateState();
             revealApp();
             setStatus("Sincronizado con Supabase");
+            window.dispatchEvent(new CustomEvent("sst:session", { detail: { signedIn: true } }));
         } catch (error) {
             console.error("No se pudieron cargar los datos de Supabase.", error);
             showGate("No se pudieron cargar tus datos. Comprueba la conexión e inténtalo de nuevo.");
@@ -227,6 +229,8 @@
 
     window.SSTCloud = Object.freeze({
         start,
+        getClient: () => client,
+        getUser: () => user,
         isSignedIn: () => Boolean(user),
         queueStateSync,
         syncNow,
