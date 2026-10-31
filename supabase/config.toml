@@ -1,0 +1,3 @@
+[functions.sst-reports]
+# Function validates Supabase users and the server-only scheduler secret itself.
+verify_jwt = false

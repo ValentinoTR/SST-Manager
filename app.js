@@ -1491,6 +1491,13 @@ function openWorkerModal(workerId = null) {
         onSubmit(data) {
             if (worker) {
 
+                // Keep the shared worker roster reusable without duplicate documents.
+                const document = String(data.dni || "").trim().toUpperCase();
+                if (state.workers.some(item => item.id !== worker.id && String(item.dni || "").trim().toUpperCase() === document)) {
+                    showToast("Ya existe un colaborador con ese DNI / documento.");
+                    return;
+                }
+
                 Object.assign(
                     worker,
                     data
@@ -1502,6 +1509,11 @@ function openWorkerModal(workerId = null) {
 
             } else {
 
+                const document = String(data.dni || "").trim().toUpperCase();
+                if (state.workers.some(item => String(item.dni || "").trim().toUpperCase() === document)) {
+                    showToast("Ya existe un colaborador con ese DNI / documento.");
+                    return;
+                }
                 state.workers.push({
 
                     id: createId(),

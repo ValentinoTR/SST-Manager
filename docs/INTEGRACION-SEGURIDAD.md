@@ -1,0 +1,57 @@
+# Integración de vehículos y charlas
+
+## Estructura y conservación
+
+SST-Manager sigue siendo una aplicación estática HTML/CSS/JavaScript publicada en GitHub Pages. `app.js`, `metrics.js`, `reports.js` y `workspace.js` mantienen los módulos anteriores. No se reemplazó `sst_app_state`, sus registros, el bucket `sst-attachments` ni la configuración pública del proyecto `dxhlobdjcfhjatyxrntx`.
+
+Los apartados nuevos están en `safety.js`, sus reglas comprobables en `safety-core.js` y los estilos complementarios en `safety.css`. Reutilizan sesión, navegación, estilos y trabajadores existentes. Las charlas guardan una instantánea de cada participante para conservar nombres, DNI, cargo y área históricos aunque cambie la ficha. En una corrección pueden ajustarse los convocados; nuevos trabajadores aparecen disponibles sin marcar. El registro de trabajadores evita documentos duplicados en el formulario existente y cada charla exige DNI de 8 dígitos únicos.
+
+## Base de datos y permisos
+
+Instalación nueva: ejecutar en orden los tres archivos de `supabase/migrations/`, creados con Supabase CLI. Los SQL equivalentes en la raíz permiten revisar la instalación desde el editor del panel; no ejecutar ambas copias ni volver a aplicar una instalación existente. La instancia actual fue instalada desde el editor SQL. Antes de usar `db push`, registrar esas migraciones como ya aplicadas mediante `supabase migration repair` siguiendo su `--help`; no volver a ejecutarlas.
+
+Tablas: vehículos, documentos actuales, versiones inmutables, episodios de fallas críticas, historial de cambios, configuración de correo, cola de reportes y roles. RLS restringe todo al usuario propietario. Cada cuenta conserva el mismo espacio privado que ya tenía la aplicación: no se creó un espacio compartido entre distintas cuentas. Usar la misma cuenta en varios dispositivos.
+
+Las cuentas existentes tienen permiso `editor` en estos módulos. Un administrador del proyecto puede asignar en `sst_module_roles` los roles `viewer`, `editor` o `admin`. No hay altas de cuentas ni cambios de permisos desde el cliente. `viewer` consulta, descarga y ve versiones; `editor` y `admin` crean, corrigen, documentan levantamientos y configuran el destinatario de sus propios registros. Los permisos nuevos no cambian los permisos de edición que ya tenían los módulos antiguos.
+
+Los componentes críticos están fijados en servidor; el cliente no puede degradarlos. La vista `sst_vehicle_status` usa `security_invoker`, RLS y todas las fallas pendientes. No existe un campo editable para marcar «Apto». Una inspección posterior conforme o la corrección de una respuesta no levanta fallas previas. Cada levantamiento exige explicación y evidencia privada, y conserva responsable y fecha. Si reaparece una falla previamente levantada en una corrección se abre un nuevo episodio. Las versiones y archivos originales no tienen permisos de borrado o sobrescritura para el navegador.
+
+Las correcciones de documentos exigen motivo y versión esperada: una edición simultánea desde otro dispositivo se rechaza. Se registran versiones anteriores, actor y hora del servidor. Las correcciones del catálogo de vehículos y, desde esta instalación, las altas/cambios/bajas de trabajadores del JSON antiguo también generan auditoría.
+
+## Fotografías, documentos y PDF
+
+El bucket `sst-safety` es privado, acepta JPG, PNG, WebP y PDF de hasta 10 MB por archivo. Los enlaces de consulta expiran a los 120 segundos. Solo pueden subirse evidencias dentro de la carpeta del propietario; los PDF de reportes los escribe el servidor. Los archivos de historial no se pueden reemplazar ni borrar desde la aplicación. Un archivo subido antes de que falle un guardado puede quedar sin referencia: no eliminar archivos por lote sin comprobar todas las versiones.
+
+`sst-reports` genera y conserva un PDF por versión con resultados, observaciones, responsable, fecha, participantes, ausentes, porcentajes y evidencia. Las fotografías del checklist se optimizan a JPEG con un máximo de 1600 píxeles antes de almacenarse, para reducir memoria y tamaño del correo. El reporte inserta esas fotografías y las firmas PNG. Los materiales PDF quedan referenciados para consulta privada dentro del sistema; no se incrustan en el PDF. La aptitud histórica del reporte indica el resultado de esa versión y las fallas abiertas al emitirlo; para operar siempre consultar el estado actual.
+
+Los respaldos JSON antiguos conservan su alcance anterior. Los registros nuevos y sus archivos se respaldan desde Supabase; no forman parte de la restauración de `sst_app_state`. No modificar ni borrar las nuevas tablas al restaurar el respaldo antiguo. Para copias independientes usar exportación/backup de PostgreSQL y Storage con acceso administrativo, protegiendo DNI y firmas.
+
+## Correo automático
+
+Destinatario inicial: **seguridad@reliper.pe**. Remitente: **educornejoperea28@gmail.com**. El destinatario se configura por cuenta en «Correo y permisos». Cada versión encola un reporte, sin filtrar resultados conformes. Cambiar el destinatario afecta los reportes futuros; la cola conserva el destinatario que tenía al registrar cada versión.
+
+El proveedor es Gmail API por HTTPS con OAuth 2.0. En **Edge Functions → Secrets**, el propietario de Gmail debe guardar `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` y `GMAIL_REFRESH_TOKEN` autorizados para `https://www.googleapis.com/auth/gmail.send` desde la cuenta remitente. No agregar estos valores al repositorio, archivos de configuración pública, capturas ni chat. Habilitar Gmail API en Google Cloud y usar un cliente OAuth propio. Revisar las restricciones de Google para aplicaciones externas en modo Testing: sus autorizaciones pueden caducar y requerir nueva autorización. Una firma manuscrita aquí no es una firma digital certificada.
+
+La función valida los JWT con `auth.getUser()` y limita cada solicitud a la cola de esa cuenta. La tarea `sst-safety-reports` se ejecuta cada minuto con pg_cron/pg_net y un secreto aleatorio almacenado en un esquema privado. No depende de la pestaña abierta. Se desactiva únicamente la verificación del JWT legado en el gateway, porque la función valida usuarios y el programador dentro del código; no se admite acceso anónimo. El origen permitido es `https://valentinotr.github.io`, configurable con `APP_ORIGIN` para otro alojamiento.
+
+El PDF se genera antes de solicitar autorización a Gmail, por lo que puede descargarse aunque falten las credenciales de correo. Hay bloqueo atómico con `SKIP LOCKED` para evitar que dos ejecuciones reclamen el mismo trabajo. Los errores confirmados generan reintentos con espera creciente. Si la respuesta al envío se pierde, el estado queda `uncertain`, sin reenvío automático, para reducir duplicados. Un administrador debe comprobar en Gmail el `Message-ID` `sst-<id-del-trabajo>@sst-manager.local` y el destinatario: si fue aceptado, registrar el `provider_id`/fecha y `sent`; si se confirma que no fue enviado, restablecer a `retry`. No existe garantía de entrega exactamente una vez entre dos servicios externos.
+
+`sent` significa aceptado por Gmail, sin confirmar lectura ni entrega final. Los PDF mayores de 18 MB se conservan para descargar, pero el correo queda pendiente con un error explícito. Ajustar fotografías y crear una corrección para producir un reporte menor. Las credenciales y la respuesta completa de Google no se registran en los errores mostrados al cliente.
+
+## Base normativa verificada
+
+Consulta: 31/10/2026. La [compilación MINEM edición 2026](https://www.gob.pe/institucion/minem/informes-publicaciones/5631689-reglamento-de-seguridad-y-salud-ocupacional-en-mineria-ed-2024) declara actualización al **30/05/2024** y contempla D. S. 024-2016-EM, D. S. 023-2017-EM y [D. S. 034-2023-EM](https://www.gob.pe/institucion/minem/normas-legales/4990975-034-2023-em). Esa fecha de corte no equivale a certificar que no existan cambios posteriores o exigencias específicas de cada unidad.
+
+Los [artículos 71–76 del texto publicado por Osinergmin](https://www.osinergmin.gob.pe/seccion/centro_documental/PlantillaMarcoLegalBusqueda/DS-024-2016-EM.pdf) distinguen programas/cursos de capacitación y reuniones previas al trabajo. Por eso la nueva charla conserva contenido, unidad, área, expositor, duración, convocados y evidencia individual; no se suma automáticamente a cursos ni emite constancias del Anexo 6. El mínimo de 5 minutos del formulario es una regla operativa de este módulo; no sustituye la duración ni las evaluaciones exigibles a cursos. La asistencia sola no acredita comprensión o participación efectiva: cuando corresponde, activar evidencia individual y registrar evaluación/verificación. La firma trazada es opcional y de apoyo. No se genera una certificación automática de cumplimiento legal.
+
+Los artículos 374–375 de ese texto orientan la inspección/mantenimiento de equipos y la operación autorizada. El checklist es una base que debe contrastarse con fabricante, IPERC y estándar de la unidad: se permite elevar componentes adicionales a críticos. Los requisitos específicos para transporte, el tipo de vehículo y las tareas requieren evaluación del responsable SST de la operación. La conservación sin borrado en cliente evita fijar un plazo legal universal no verificado; aplicar la política de retención de la empresa y los plazos de las normas que correspondan.
+
+Referencias técnicas: [Gmail OAuth de servidor](https://developers.google.com/workspace/gmail/api/auth/web-server), [envío Gmail](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send), [autenticación Edge Functions](https://supabase.com/docs/guides/functions/auth), [programación Supabase](https://supabase.com/docs/guides/functions/schedule-functions), [buckets privados](https://supabase.com/docs/guides/storage/buckets/fundamentals).
+
+## Verificación
+
+`npm ci --ignore-scripts` y `npm test`: reglas, 18/20 = 90 %, validación SQL real con PostgreSQL embebido, RLS entre cuentas, permisos de solo lectura, evidencias, bloqueo/reapertura de fallas, auditoría, versiones, duplicados, concurrencia optimista, generación PDF y protocolo Gmail simulado. `node tests/baseline.mjs` compara las pruebas anteriores con el commit original: 95 de 101 pasan en ambas versiones y las mismas seis fallan en cálculos antiguos, sin cambios en metrics.js/reports.js.
+
+`npm run preview`: servidor local. `/` muestra el acceso real; `/__test__` usa 20 trabajadores ficticios y un backend simulado para revisión de interfaz. Esa ruta solo la implementa el servidor de pruebas, no GitHub Pages. No guardar fichas del backend simulado. Se revisaron formularios y navegación en Chrome y el checklist a 390 px de ancho, y se renderizaron los PDF de prueba con Poppler. Las pruebas Gmail no envían mensajes reales.
+
+Antes de declarar el correo operativo, guardar los secretos y verificar un envío real y su PDF en el destinatario. Revisar «Advisors» de Supabase después de cada cambio de seguridad. El despliegue del panel usa el archivo equivalente producido por `node tests/bundle-edge.mjs`; la fuente mantenida está en `supabase/functions/sst-reports/`.

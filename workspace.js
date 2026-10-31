@@ -32,7 +32,7 @@ nav[0].setAttribute('aria-current','page');
 const normalize = text => String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 function search(){
  const query=normalize($('globalSearch').value.trim());
- const results=[...nav.map(b=>({label:b.textContent.trim(),detail:'Módulo',action:()=>openPage(b.dataset.page)})),...state.workers.map(w=>({label:w.name,detail:`${w.area||'Sin área'} · ${w.dni||''}`,action:()=>openProfile(w.id)}))].filter(r=>normalize(r.label+' '+r.detail).includes(query)).slice(0,30);
+ const results=[...[...document.querySelectorAll('.menu .nav-item')].map(b=>({label:b.textContent.trim(),detail:'Módulo',action:()=>openPage(b.dataset.page)})),...state.workers.map(w=>({label:w.name,detail:`${w.area||'Sin área'} · ${w.dni||''}`,action:()=>openProfile(w.id)}))].filter(r=>normalize(r.label+' '+r.detail).includes(query)).slice(0,30);
  const box=$('searchResults');box.replaceChildren();
  results.forEach(r=>{const b=document.createElement('button');b.className='search-result';const label=document.createElement('span');label.textContent=r.label;const detail=document.createElement('small');detail.textContent=r.detail;b.append(label,detail);b.onclick=()=>{$('searchDialog').close();r.action();$('mainContent').focus();};box.append(b);});
  if(!results.length)box.textContent='No hay coincidencias. Prueba otro nombre, DNI o módulo.';

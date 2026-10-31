@@ -1,5 +1,9 @@
 # SST Control — sincronización privada con Supabase
 
+## Inspección de vehículos y charlas de seguridad
+
+Los dos nuevos apartados reutilizan la sesión y los colaboradores existentes. Guardan registros, versiones, fallas, evidencias y reportes en tablas/bucket privados de Supabase, separados del respaldo JSON antiguo. La instalación, permisos, verificación normativa, PDF y autorización de Gmail están documentados en [Integración de seguridad](docs/INTEGRACION-SEGURIDAD.md). Los reportes se encolan para `seguridad@reliper.pe`; enviar desde `educornejoperea28@gmail.com` requiere autorizar Gmail en los secretos del servidor.
+
 ## Acceso
 
 La aplicación usa Supabase para guardar registros y adjuntos privados. El alta pública está desactivada; cada cuenta debe crearse desde **Authentication → Users → Add user** en el panel del proyecto. Después inicia sesión en la aplicación con ese correo y contraseña. Usa la misma cuenta en tus dispositivos.
