@@ -3,6 +3,17 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 const labels={tires:'Llantas y ruedas',brakes:'Frenos',lights:'Luces',windows:'Ventanas',mirrors:'Espejos',belts:'Cinturones',extinguisher:'Extintor',horn:'Bocina',fluids:'Fluidos y fugas',steering:'Dirección',reverse:'Alarma de retroceso',wipers:'Limpiaparabrisas',firstaid:'Botiquín y herramientas',other:'Otros'};
 const criticalIds=['tires','brakes','lights','mirrors','belts','extinguisher','horn','fluids','steering','reverse'];
 const clean=value=>String(value??'').normalize('NFC').replace(/[\u2010-\u2015]/g,'-').replace(/[^\x20-\x7e\xa0-\xff\n]/g,'?');
+export async function createMailTest(){
+ const doc=await PDFDocument.create(),page=doc.addPage(),font=await doc.embedFont(StandardFonts.Helvetica);
+ doc.setTitle('SST-Manager - Prueba técnica de envío');
+ const lines=['SST-MANAGER / PRUEBA TECNICA DE ENVIO','Este PDF verifica la conexión del servidor con Gmail.',
+  'Remitente: educornejoperea28@gmail.com','Destinatario: seguridad@reliper.pe',
+  'No corresponde a una inspección ni a una charla de seguridad.',
+  'No contiene datos de trabajadores ni modifica los registros del sistema.',
+  'Emitido: '+new Date().toLocaleString('es-PE',{timeZone:'America/Lima'})+' (Lima)'];
+ lines.forEach((line,i)=>page.drawText(clean(line),{x:45,y:780-i*29,size:i?11:15,font}));
+ return doc.save();
+}
 export async function createReport(version,defects=[],getFile=async()=>null){
  const doc=await PDFDocument.create(),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
  doc.setTitle(version.kind==='inspection'?'Inspección de vehículos':'Charla de seguridad');doc.setAuthor('SST Control - Reliper');
