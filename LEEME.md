@@ -1,5 +1,9 @@
 # SST Control — sincronización privada con Supabase
 
+## Revisión de interfaz y seguridad (rama de desarrollo)
+
+La auditoría, cambios incrementales, pruebas, límites y orden de activación están en [Auditoría integral](docs/AUDITORIA-INTEGRAL.md). Esta revisión conserva HTML/CSS/JavaScript y los módulos originales; no publica ni modifica la instancia de producción. Ejecuta `npm test` y `npm run preview` para revisar el código localmente. La ruta `/__test__` usa exclusivamente datos sintéticos y no envía correos.
+
 ## Inspección de vehículos y charlas de seguridad
 
 Los dos nuevos apartados reutilizan la sesión y los colaboradores existentes. Guardan registros, versiones, fallas, evidencias y reportes en tablas/bucket privados de Supabase, separados del respaldo JSON antiguo. La instalación, permisos, verificación normativa, PDF y autorización de Gmail están documentados en [Integración de seguridad](docs/INTEGRACION-SEGURIDAD.md). Los reportes se encolan para `seguridad@reliper.pe`; enviar desde `educornejoperea28@gmail.com` requiere autorizar Gmail en los secretos del servidor.

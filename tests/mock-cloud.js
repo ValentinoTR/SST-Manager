@@ -2,9 +2,11 @@
 window.SSTCloud=(()=>{const documents=[];return{
  start(){
   document.body.classList.remove('cloud-locked');
+  document.querySelector('.utility-bar').insertAdjacentHTML('afterend','<p class="safety-notice" role="status">PRUEBA LOCAL · Datos sintéticos para revisar la interfaz. No utiliza tus registros reales ni envía correos.</p>');
   state.workers=Array.from({length:20},(_,n)=>({id:String(n),name:'Trabajador de prueba '+(n+1),dni:String(10000000+n),role:'Operador',area:'Mantenimiento',status:'Activo'}));renderAll();
   window.dispatchEvent(new CustomEvent('sst:session',{detail:{signedIn:true}}));
  },isSignedIn:()=>true,getUser:()=>({id:'10000000-0000-4000-8000-000000000001',email:'prueba@example.test'}),
+ persistLocalState(){},queueStateSync(){},async syncNow(){},getSyncState:()=>({status:'synced',pending:false,conflict:false}),
  getClient(){const vehicle={id:'20000000-0000-4000-8000-000000000001',plate:'ABC123',type:'Camioneta',brand:'Marca',model:'Modelo',revision:1};return{
   functions:{invoke:async()=>({data:{processed:[]}})},
   async rpc(name,args){if(name==='sst_reliper_ready')return {data:!new URLSearchParams(location.search).has('legacy')};if(name==='sst_save_document'){

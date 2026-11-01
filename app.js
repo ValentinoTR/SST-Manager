@@ -105,7 +105,8 @@ let state = loadState();
 function saveState() {
 
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        if (window.SSTCloud?.persistLocalState) window.SSTCloud.persistLocalState(state);
+        else localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (error) {
         alert("No se pudo guardar el cambio en este navegador. No cierres la página: descarga un respaldo desde Respaldos para conservar la información. Revisa el espacio disponible y los permisos de almacenamiento.");
         throw error;
@@ -293,6 +294,7 @@ async function filesTransaction(mode, work) {
 
 // Devuelve { id, name, type, size } o null si no hay archivo.
 async function storeAttachment(file) {
+    const submissionOwner=window.SSTCloud?.getUser()?.id;
 
     if (!(file instanceof File) || file.size === 0) {
         return null;
@@ -300,30 +302,32 @@ async function storeAttachment(file) {
 
     if (file.size > MAX_FILE_BYTES) {
 
-        showToast("El archivo supera los 10 MB y no se adjuntó.");
-
-        return null;
+        throw new Error("El archivo supera los 10 MB. Elige otro archivo antes de guardar.");
 
     }
 
     try {
 
         const id = createId();
+        const ownerId = window.SSTCloud?.getUser()?.id;
+        const cacheKey = window.SSTCloud?.attachmentCacheKey ? window.SSTCloud.attachmentCacheKey(id, ownerId) : id;
 
         if (window.SSTCloud?.isSignedIn()) {
             await window.SSTCloud.uploadAttachment(id, file);
         }
+        if (window.SSTCloud?.attachmentCacheKey) window.SSTCloud.attachmentCacheKey(id, ownerId);
 
         try {
             await filesTransaction(
                 "readwrite",
-                store => store.put(file, id)
+                store => store.put(file, cacheKey)
             );
         } catch (cacheError) {
             if (!window.SSTCloud?.isSignedIn()) throw cacheError;
             console.warn("El archivo quedó guardado en la nube; no se pudo crear la copia local.", cacheError);
         }
 
+        if(window.SSTCloud?.getUser()?.id!==submissionOwner)throw new Error("La sesión cambió. Vuelve a abrir el formulario.");
         return {
             id,
             name: file.name,
@@ -335,9 +339,7 @@ async function storeAttachment(file) {
 
         console.error("No se pudo guardar el archivo.", error);
 
-        showToast("No se pudo guardar el archivo adjunto.");
-
-        return null;
+        throw new Error(window.SSTCloud?.getUser()?.id!==submissionOwner?"La sesión cambió. Vuelve a abrir el formulario.":"No se pudo guardar el adjunto. El registro no se guardó; vuelve a intentarlo.");
 
     }
 
@@ -346,11 +348,13 @@ async function storeAttachment(file) {
 
 // Separa el archivo del resto de los datos del formulario.
 async function withAttachment(data) {
+    const submissionOwner=window.SSTCloud?.getUser()?.id;
 
     const { attachment: file, ...rest } = data;
 
     const meta = await storeAttachment(file);
 
+    if(window.SSTCloud?.getUser()?.id!==submissionOwner)throw new Error("La sesión cambió. Vuelve a abrir el formulario.");
     return meta ? { ...rest, attachment: meta } : rest;
 
 }
@@ -366,16 +370,15 @@ async function dropAttachments(ids) {
 
     try {
 
-        await filesTransaction(
-            "readwrite",
-            store => {
-                list.forEach(id => store.delete(id));
-            }
-        );
-
+        const ownerId = window.SSTCloud?.getUser()?.id;
+        list.forEach(id => { if(window.SSTCloud?.attachmentCacheKey) window.SSTCloud.attachmentCacheKey(id, ownerId); });
+        // Unlink logically; private originals are retained under the administrator retention policy.
         if (window.SSTCloud?.isSignedIn()) {
             await window.SSTCloud.deleteAttachment(list);
+            list.forEach(id => window.SSTCloud.attachmentCacheKey(id, ownerId));
         }
+
+        // Retain private cache originals for recovery after a rejected concurrent save.
 
     } catch (error) {
 
@@ -390,15 +393,19 @@ async function openAttachment(id) {
 
     try {
 
+        const ownerId = window.SSTCloud?.getUser()?.id;
+        const cacheKey = window.SSTCloud?.attachmentCacheKey ? window.SSTCloud.attachmentCacheKey(id, ownerId) : id;
+
         const blob =
             await filesTransaction(
                 "readonly",
-                store => store.get(id)
+                store => store.get(cacheKey)
             );
 
         const fileBlob = blob || (window.SSTCloud?.isSignedIn()
             ? await window.SSTCloud.downloadAttachment(id)
             : null);
+        if (window.SSTCloud?.attachmentCacheKey) window.SSTCloud.attachmentCacheKey(id, ownerId);
 
         if (!fileBlob) {
             showToast("El archivo no está disponible en este dispositivo ni en la nube.");
@@ -407,15 +414,24 @@ async function openAttachment(id) {
 
         if (!blob) {
             try {
-                await filesTransaction("readwrite", store => store.put(fileBlob, id));
+                await filesTransaction("readwrite", store => store.put(fileBlob, cacheKey));
             } catch (cacheError) {
                 console.warn("No se pudo guardar una copia local del adjunto.", cacheError);
             }
         }
 
+        if (window.SSTCloud?.attachmentCacheKey) window.SSTCloud.attachmentCacheKey(id, ownerId);
         const url = URL.createObjectURL(fileBlob);
 
-        window.open(url, "_blank");
+        // HTML/SVG and unknown MIME must not execute with this app's origin via blob:.
+        if (["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "text/plain"].includes(fileBlob.type)) {
+            window.open(url, "_blank", "noopener,noreferrer");
+        } else {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileBlob.name || `SST-adjunto-${id}`;
+            link.click();
+        }
 
         setTimeout(() => URL.revokeObjectURL(url), 60000);
 
@@ -447,6 +463,7 @@ function attachmentField(label, multiple = false) {
 
 // Guarda uno o varios archivos y devuelve la lista de metadatos.
 async function storeAttachments(files) {
+    const submissionOwner=window.SSTCloud?.getUser()?.id;
 
     const list =
         (Array.isArray(files) ? files : [files])
@@ -456,6 +473,7 @@ async function storeAttachments(files) {
 
     for (const file of list) {
         const meta = await storeAttachment(file);
+        if(window.SSTCloud?.getUser()?.id!==submissionOwner)throw new Error('La sesión cambió. Vuelve a abrir el formulario.');
         if (meta) {
             stored.push(meta);
         }
@@ -468,12 +486,14 @@ async function storeAttachments(files) {
 // Igual que withAttachment, pero admite varios archivos:
 // los guarda en "attachments".
 async function withAttachments(data) {
+    const submissionOwner=window.SSTCloud?.getUser()?.id;
 
     const { attachment: files, ...rest } = data;
 
     const stored =
         await storeAttachments(files);
 
+    if(window.SSTCloud?.getUser()?.id!==submissionOwner)throw new Error("La sesión cambió. Vuelve a abrir el formulario.");
     return stored.length
         ? { ...rest, attachments: stored }
         : rest;
@@ -672,7 +692,7 @@ function removeEvidence(ctx, fileId) {
         return;
     }
 
-    if (!confirm("¿Quitar esta evidencia? El archivo se borrará de este navegador.")) {
+    if (!confirm("¿Quitar esta evidencia del registro? El original privado se conserva para recuperación.")) {
         return;
     }
 
@@ -698,62 +718,12 @@ function removeEvidence(ctx, fileId) {
    ========================================================= */
 
 function daysUntil(dateString) {
-
-    if (!dateString) {
-        return null;
-    }
-
-    const end =
-        new Date(dateString + "T00:00:00");
-
-    const now =
-        new Date(today() + "T00:00:00");
-
-    return Math.ceil(
-        (end - now) /
-        (1000 * 60 * 60 * 24)
-    );
-
+    return SSTMetrics.daysUntil(dateString,today());
 }
 
 
 function expirationState(dateString) {
-
-    if (!dateString) {
-
-        return {
-            text: "Sin fecha",
-            className: "badge-gray"
-        };
-
-    }
-
-    const days =
-        daysUntil(dateString);
-
-    if (days < 0) {
-
-        return {
-            text: "Vencido",
-            className: "badge-red"
-        };
-
-    }
-
-    if (days <= 30) {
-
-        return {
-            text: "Por vencer",
-            className: "badge-yellow"
-        };
-
-    }
-
-    return {
-        text: "Vigente",
-        className: "badge-green"
-    };
-
+    return SSTMetrics.expirationState(dateString,today());
 }
 
 
@@ -1127,6 +1097,8 @@ function openModal({
 
         input.name =
             field.name;
+        input.id = `record-field-${field.name}`;
+        label.htmlFor = input.id;
 
 
         if (field.required) {
@@ -1142,7 +1114,7 @@ function openModal({
         }
 
 
-        if (field.min) {
+        if (field.min !== undefined) {
 
             input.min =
                 field.min;
@@ -1158,7 +1130,7 @@ function openModal({
         }
 
 
-        if (field.max) {
+        if (field.max !== undefined) {
 
             input.max =
                 field.max;
@@ -1236,7 +1208,7 @@ modalBackdrop.addEventListener(
 
         if (
             event.target ===
-            modalBackdrop
+            modalBackdrop && !modalSubmit.disabled
         ) {
 
             closeModal();
@@ -1249,10 +1221,11 @@ modalBackdrop.addEventListener(
 
 modalForm.addEventListener(
     "submit",
-    event => {
+    async event => {
 
         event.preventDefault();
 
+        if (modalSubmit.disabled) return;
         const rawData =
             new FormData(
                 modalForm
@@ -1262,6 +1235,17 @@ modalForm.addEventListener(
             Object.fromEntries(
                 rawData.entries()
             );
+
+        for (const field of currentFields) {
+            if (typeof formData[field.name] === 'string') {
+                formData[field.name] = formData[field.name].trim();
+                if (field.required && !formData[field.name]) {
+                    showToast(`Completa ${field.label.toLowerCase()}.`);
+                    modalForm.elements.namedItem(field.name)?.focus();
+                    return;
+                }
+            }
+        }
 
         currentFields
             .filter(field =>
@@ -1281,9 +1265,23 @@ modalForm.addEventListener(
             currentSubmitFunction
         ) {
 
-            currentSubmitFunction(
-                formData
-            );
+            modalSubmit.disabled = true;
+            const submitLabel = modalSubmit.textContent;
+            modalSubmit.textContent = 'Guardando…';
+            document.getElementById('modalClose').disabled = true;
+            document.getElementById('modalCancel').disabled = true;
+            modalForm.setAttribute('aria-busy', 'true');
+            try {
+                await currentSubmitFunction(formData);
+            } catch (error) {
+                showToast(error.message || 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.');
+            } finally {
+                modalSubmit.disabled = false;
+                modalSubmit.textContent = submitLabel;
+                document.getElementById('modalClose').disabled = false;
+                document.getElementById('modalCancel').disabled = false;
+                modalForm.removeAttribute('aria-busy');
+            }
 
         }
 
@@ -2843,9 +2841,10 @@ function renderMedical() {
    ========================================================= */
 
 function renderDashboard() {
+    const scoped = dashboardState();
 
     const activeWorkers =
-        state.workers.filter(
+        scoped.workers.filter(
             worker =>
                 worker.status ===
                 "Activo"
@@ -2861,11 +2860,11 @@ function renderDashboard() {
     /* ASISTENCIA */
 
     const month =
-        currentMonth();
+        boardMonth();
 
 
     const attendanceRecords =
-        SSTMetrics.registeredAttendance(state.attendance).filter(
+        SSTMetrics.registeredAttendance(scoped.attendance).filter(
             record =>
                 record.date.startsWith(month) &&
                 record.status !== "Descanso"
@@ -2895,13 +2894,13 @@ function renderDashboard() {
     document.getElementById(
         "metricAttendance"
     ).textContent =
-        `${attendancePercentage}%`;
+        attendanceRecords.length ? `${attendancePercentage}%` : "—";
 
 
     /* EPP */
 
     const eppDue =
-        state.epp.filter(record => {
+        scoped.epp.filter(record => {
 
             const days =
                 daysUntil(
@@ -2926,7 +2925,7 @@ function renderDashboard() {
     /* SEGUROS */
 
     const insuranceDue =
-        state.insurance.filter(
+        scoped.insurance.filter(
             record => {
 
                 const days =
@@ -2957,6 +2956,7 @@ function renderDashboard() {
     renderAlerts();
 
     renderBoard();
+    window.dispatchEvent(new CustomEvent("sst:dashboard"));
 
 }
 
@@ -2987,7 +2987,7 @@ function renderUrgent() {
     }
 
     const data =
-        SSTMetrics.urgentItems(state, today());
+        SSTMetrics.urgentItems(dashboardState(), today());
 
     counts.innerHTML = `
         <span class="urgent-count critical">${data.counts.critical} crítico(s)</span>
@@ -3044,7 +3044,7 @@ function renderProgramMetric() {
     }
 
     const data =
-        SSTMetrics.programStats(state, today().slice(0, 4), today());
+        SSTMetrics.programStats(state, boardMonth().slice(0, 4), today());
 
     value.textContent =
         data.toDate.pct === null ? "—" : `${data.toDate.pct}%`;
@@ -3067,7 +3067,7 @@ function renderAlerts() {
     const alerts = [];
 
 
-    state.epp.forEach(record => {
+    dashboardState().epp.forEach(record => {
 
         const days =
             daysUntil(
@@ -3099,7 +3099,7 @@ function renderAlerts() {
     });
 
 
-    state.insurance.forEach(
+    dashboardState().insurance.forEach(
         record => {
 
             const days =
@@ -3133,7 +3133,7 @@ function renderAlerts() {
     );
 
 
-    state.medical.forEach(
+    dashboardState().medical.forEach(
         record => {
 
             const days =
@@ -3231,9 +3231,13 @@ boardMonthInput.value =
 
 boardMonthInput.addEventListener(
     "change",
-    renderBoard
+    renderDashboard
 );
 
+
+function dashboardState() {
+    return SSTWorkspace.scopeState(state, document.getElementById("dashboardArea")?.value || "");
+}
 
 function boardMonth() {
 
@@ -3249,6 +3253,12 @@ const MONTH_NAMES = [
 
 
 function renderBoardFilters() {
+    const select = document.getElementById("dashboardArea");
+    if (select) {
+        const previous=select.value;
+        select.replaceChildren(...[{value:"",label:"Todas las áreas"},...distinctAreas().map(area=>({value:area,label:area}))].map(item=>{const o=document.createElement("option");o.value=item.value;o.textContent=item.label;return o;}));
+        select.value=[...select.options].some(o=>o.value===previous)?previous:"";
+    }
 
     const [year, number] =
         boardMonth().split("-");
@@ -3297,7 +3307,7 @@ function setBoardPeriod(year, number) {
 
     boardMonthInput.value = `${year}-${number}`;
 
-    renderBoard();
+    renderDashboard();
 
 }
 
@@ -3405,7 +3415,8 @@ const EPP_MARKS = {
     ok:      { css: "mark-ok",      icon: "✓" },
     due:     { css: "mark-due",     icon: "⚠" },
     expired: { css: "mark-expired", icon: "⚠" },
-    none:    { css: "mark-none",    icon: "—" }
+    none:    { css: "mark-none",    icon: "—" },
+    nodate:  { css: "mark-none",    icon: "?" }
 };
 
 
@@ -3414,6 +3425,7 @@ function eppCellHtml(cell) {
     const mark = EPP_MARKS[cell.status];
 
     let note = "pendiente";
+    if (cell.status === 'nodate') note = 'Revisar fecha';
 
     if (cell.status === "ok") {
         note = shortDate(cell.date);
@@ -3451,7 +3463,7 @@ function eppCellHtml(cell) {
 function renderBoardEpp() {
 
     const data =
-        SSTMetrics.eppMatrix(state, today());
+        SSTMetrics.eppMatrix(dashboardState(), today());
 
     if (data.rows.length === 0) {
 
@@ -3581,7 +3593,7 @@ function insuranceCellHtml(cell) {
 function renderBoardInsurance() {
 
     const data =
-        SSTMetrics.insuranceTable(state, today());
+        SSTMetrics.insuranceTable(dashboardState(), today());
 
     if (data.rows.length === 0) {
 
@@ -3680,14 +3692,14 @@ function renderBoardTraining() {
         boardMonth();
 
     const data =
-        SSTMetrics.trainingStats(state, month);
+        SSTMetrics.trainingStats(dashboardState(), month);
 
     const pending =
         data.monthPending
             ? `
                 <div class="goal-row">
                     <p class="goal-note">
-                        ${data.monthPending} charla(s) programada(s) o pendiente(s) este mes.
+                        ${data.monthPending} capacitación(es) programada(s) o pendiente(s) este mes.
                     </p>
                 </div>
             `
@@ -3707,13 +3719,13 @@ function renderBoardTraining() {
                     `).join("")}
                 </div>
             `
-            : emptyBoard("No hay charlas completadas en este mes.");
+            : emptyBoard("No hay capacitaciones completadas en este mes.");
 
     setBoard("boardTrainingBody", `
 
-        ${goalBlock(`Charlas de ${monthTitle(month)}`, data.monthDone, data.monthGoal, data.monthPct)}
+        ${goalBlock(`Capacitaciones de ${monthTitle(month)}`, data.monthDone, data.monthGoal, data.monthPct)}
 
-        ${goalBlock(`Charlas del año ${data.year}`, data.yearDone, data.yearGoal, data.yearPct)}
+        ${goalBlock(`Capacitaciones del año ${data.year}`, data.yearDone, data.yearGoal, data.yearPct)}
 
         ${pending}
 
@@ -3996,7 +4008,7 @@ function renderBoardFindings() {
         boardMonth();
 
     const stats =
-        SSTMetrics.findingsStats(state, month);
+        SSTMetrics.findingsStats(dashboardState(), month);
 
     const total =
         stats.reduce((sum, item) => ({
@@ -4371,7 +4383,7 @@ function renderBoardInspections() {
         boardMonth();
 
     const data =
-        SSTMetrics.inspectionsStats(state, month);
+        SSTMetrics.inspectionsStats(dashboardState(), month);
 
     const totals = data.totals;
 
@@ -4486,7 +4498,7 @@ function attendanceBadge(pct) {
 function renderBoardAttendance() {
 
     const rows =
-        SSTMetrics.attendanceByWorker(state, boardMonth());
+        SSTMetrics.attendanceByWorker(dashboardState(), boardMonth());
 
     if (rows.length === 0) {
 
@@ -4651,7 +4663,7 @@ function renderBoardHours() {
         month.slice(0, 4);
 
     const data =
-        SSTMetrics.hoursByYear(state, year);
+        SSTMetrics.hoursByYear(dashboardState(), year);
 
     const max =
         Math.max(
@@ -4736,7 +4748,7 @@ function renderBoardHours() {
 function renderBoardTiles() {
 
     const tiles =
-        SSTMetrics.kpiTiles(state, boardMonth());
+        SSTMetrics.kpiTiles(dashboardState(), boardMonth()).filter(tile => tile.key !== "workers");
 
     setBoard("boardTiles", `
 
@@ -4817,7 +4829,7 @@ function gaugeCardHtml(item) {
 function renderBoardGauges() {
 
     const groups =
-        SSTMetrics.kpiGauges(state, boardMonth(), today());
+        SSTMetrics.kpiGauges(dashboardState(), boardMonth(), today());
 
     setBoard("boardGauges",
         groups.map(group => `
@@ -4845,7 +4857,7 @@ function renderBoardGauges() {
 function renderBoardAreas() {
 
     const rows =
-        SSTMetrics.pendingByArea(state, today());
+        SSTMetrics.pendingByArea(dashboardState(), today());
 
     if (rows.length === 0) {
 
@@ -4908,7 +4920,7 @@ const ACTION_BADGES = {
 function renderBoardActions() {
 
     const items =
-        SSTMetrics.pendingActions(state, today());
+        SSTMetrics.pendingActions(dashboardState(), today());
 
     if (items.length === 0) {
 
@@ -7542,17 +7554,17 @@ function renderReportControls() {
 
     fillSelect(
         "reportWorker",
-        [...state.workers]
+        [{value:'',label:'Todos los trabajadores'}, ...[...state.workers]
             .sort((a, b) => a.name.localeCompare(b.name, "es"))
             .map(worker => ({
                 value: worker.id,
                 label: `${worker.name} - ${worker.area}`
-            }))
+            }))]
     );
 
     fillSelect(
         "reportArea",
-        distinctAreas().map(area => ({ value: area, label: area }))
+        [{value:'',label:'Todas las áreas'}, ...distinctAreas().map(area => ({ value: area, label: area }))]
     );
 
     document
@@ -7570,7 +7582,7 @@ function renderReportControls() {
         .querySelectorAll("[data-param]")
         .forEach(group => {
 
-            group.hidden = group.dataset.param !== reportType;
+            group.hidden = !['trabajador','area'].includes(group.dataset.param) && group.dataset.param !== reportType;
 
         });
 
@@ -7591,7 +7603,11 @@ function generateReport() {
         month: document.getElementById("reportMonth").value,
         year: document.getElementById("reportYear").value,
         workerId: document.getElementById("reportWorker").value,
-        area: document.getElementById("reportArea").value
+        area: document.getElementById("reportArea").value,
+        filterArea: document.getElementById("reportArea").value,
+        filterWorkerId: document.getElementById("reportWorker").value,
+        dateFrom: document.getElementById('reportDateFrom').value,
+        dateTo: document.getElementById('reportDateTo').value
     };
 
     if (reportType === "mensual" && !options.month) {
@@ -7618,9 +7634,11 @@ function generateReport() {
 
     }
 
+    let built;
+    try { built = SSTReports.buildReport(state, options, today()); }
+    catch (error) { showToast(error.message); return; }
     currentReportOptions = { ...options };
-    currentReport =
-        SSTReports.buildReport(state, options, today());
+    currentReport = built;
 
     document.getElementById("reportTitle").textContent =
         currentReport.scopeLabel;
@@ -8586,14 +8604,7 @@ function exportWorkersCSV() {
                 row =>
                     row
                         .map(
-                            value =>
-                                `"${String(
-                                    value ?? ""
-                                )
-                                .replaceAll(
-                                    '"',
-                                    '""'
-                                )}"`
+                            value => SSTWorkspace.csvCell(value)
                         )
                         .join(",")
             )

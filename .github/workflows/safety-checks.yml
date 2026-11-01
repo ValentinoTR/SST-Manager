@@ -16,4 +16,4 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
-      - run: node --check app.js && node --check cloud.js && node --check safety.js && node --check workspace.js
+      - run: node --check app.js && node --check cloud.js && node --check safety.js && node --check workspace.js && node --check workspace-core.js

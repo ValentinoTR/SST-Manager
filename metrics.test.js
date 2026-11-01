@@ -32,6 +32,16 @@ test("daysUntil y expirationState respetan los límites (0, 30, 31 y vencido)", 
     assert.equal(M.expirationState("", TODAY).status, "nodate");
 });
 
+test("una fecha inexistente no se normaliza ni aparece vigente", () => {
+    for (const date of ["2026-02-29", "2026-04-31", "2026-13-01", "fecha inválida", "2026-10-05T12:00:00Z"]) {
+        assert.equal(M.daysUntil(date, TODAY), null, date);
+        assert.equal(M.expirationState(date, TODAY).status, "nodate", date);
+    }
+    assert.equal(M.daysUntil("2024-02-29", "2024-02-28"), 1);
+    assert.equal(M.daysUntil(TODAY, "2026-02-30"), null);
+    assert.equal(M.expirationState(TODAY, "2026-02-30").status, "nodate");
+});
+
 test("el módulo exporta todas las funciones de cálculo", () => {
     [
         "eppMatrix", "insuranceTable", "trainingStats", "findingsStats",
@@ -96,7 +106,7 @@ test("eppMatrix: entregado, por renovar, vencido y pendiente por colaborador", (
         epp: [
             { workerId: "w1", item: "Cascos nuevos", date: "2026-09-01", renewal: "2027-09-01" },
             { workerId: "w1", item: "Lentes de seguridad", date: "2026-09-01", renewal: "2026-10-20" },
-            { workerId: "w1", item: "Visera", date: "2026-01-01", renewal: "2026-09-20" },
+            { workerId: "w1", item: "Guantes", date: "2026-01-01", renewal: "2026-09-20" },
             { workerId: "w2", item: "Ropa uniforme", date: "2026-08-01", renewal: "" },
             { workerId: "w3", item: "Casco", date: "2026-08-01", renewal: "" }
         ]
@@ -105,11 +115,12 @@ test("eppMatrix: entregado, por renovar, vencido y pendiente por colaborador", (
     const result = M.eppMatrix(state, TODAY);
     const byName = Object.fromEntries(result.rows.map(r => [r.worker.name, r.cells.map(c => c.status)]));
 
-    assert.deepEqual(result.items.map(i => i.key), ["casco", "lentes", "visera", "ropa"]);
+    // Catálogo vigente de producción: se conserva; el fixture anterior era de cuatro equipos.
+    assert.deepEqual(result.items.map(i => i.key), ["casco", "lentes", "guantes", "ropa", "zapatos"]);
     assert.deepEqual(result.rows.map(r => r.worker.name), ["Ana", "Carlos"]);   // ordenados, sin inactivos
-    assert.deepEqual(byName.Carlos, ["ok", "due", "expired", "none"]);
-    assert.deepEqual(byName.Ana, ["none", "none", "none", "ok"]);
-    assert.deepEqual(result.summary, { delivered: 4, missing: 4, due: 1, expired: 1 });
+    assert.deepEqual(byName.Carlos, ["ok", "due", "expired", "none", "none"]);
+    assert.deepEqual(byName.Ana, ["none", "none", "none", "ok", "none"]);
+    assert.deepEqual(result.summary, { delivered: 4, missing: 6, due: 1, expired: 1 });
 });
 
 test("eppMatrix: gana la entrega más reciente y no se mezclan colaboradores", () => {
@@ -130,7 +141,17 @@ test("eppMatrix: gana la entrega más reciente y no se mezclan colaboradores", (
 test("eppMatrix: sin colaboradores ni registros no falla", () => {
     assert.deepEqual(M.eppMatrix({}, TODAY).rows, []);
     const r = M.eppMatrix({ workers: [W("w1", "Ana")] }, TODAY);
-    assert.deepEqual(r.summary, { delivered: 0, missing: 4, due: 0, expired: 0 });
+    assert.deepEqual(r.summary, { delivered: 0, missing: 5, due: 0, expired: 0 });
+});
+
+test("EPP conserva la entrega sin renovación y señala una renovación inválida", () => {
+    const result = M.eppMatrix({ workers: [W("a", "Ana")], epp: [
+        { workerId: "a", item: "Casco", date: TODAY, renewal: "2026-02-30" },
+        { workerId: "a", item: "Guantes", date: TODAY, renewal: "" }
+    ] }, TODAY);
+    assert.equal(result.rows[0].cells.find(item => item.key === "casco").status, "nodate");
+    assert.equal(result.rows[0].cells.find(item => item.key === "guantes").status, "ok");
+    assert.equal(result.summary.delivered, 2);
 });
 
 /* ---------- Cambio 6: vencimientos SCTR / Vida Ley ---------- */
@@ -678,14 +699,14 @@ test("kpiGauges: tres grupos con el porcentaje y color de cada indicador", () =>
 
     assert.equal(by.hph.pct, 50);              // 1 de 2 levantados
     assert.equal(by.hph.tone, "bad");
-    assert.equal(by.hph.detail, "1 de 2 del mes");
+    assert.equal(by.hph.detail, "1 levantado este mes · 1 pendiente");
     assert.equal(by.hpi.pct, null);            // sin HPI este mes
     assert.equal(by.hpi.tone, "none");
     assert.equal(by.hpi.detail, "Sin datos");
     assert.equal(by.training.pct, 50);         // 2 charlas de meta 4
     assert.equal(by.inspections.pct, 33.3);    // 1 de 3 observaciones
     assert.equal(by.attendance.pct, 75);       // (1 asistencia + 1 tardanza + 1 asistencia) / 4 días
-    assert.equal(by.epp.pct, 25);              // 2 entregas de 2 colab x 4 equipos = 8
+    assert.equal(by.epp.pct, 20);              // 2 entregas de 2 colab x 5 equipos = 10
     assert.equal(by.insurance.pct, 25);        // 1 vigente de 4 (SCTR + Vida Ley x 2)
     assert.equal(by.improvements.pct, 100);
     assert.equal(by.improvements.tone, "good");
@@ -716,8 +737,8 @@ test("kpiTiles: números de las fichas", () => {
     assert.equal(tiles.hours.sub, "2/12 meses registrados");
     assert.equal(tiles.training.value, 2);
     assert.equal(tiles.training.sub, "Meta: 4");
-    assert.equal(tiles.findings.value, 2);
-    assert.equal(tiles.findings.sub, "de 3 observados");
+    assert.equal(tiles.findings.value, 3);      // La ficha actual muestra observados, no levantados.
+    assert.equal(tiles.findings.sub, "2 levantados · 1 pendiente");
     assert.equal(tiles.inspections.value, 1);
     assert.equal(tiles.inspections.sub, "3 observaciones");
     assert.equal(tiles.pending.value, 3);       // 2 observaciones abiertas + 1 hallazgo abierto
@@ -1002,7 +1023,8 @@ function complianceState(overrides = {}) {
         epp: [
             { workerId: "a", item: "Casco", date: "2026-01-01", renewal: "2027-01-01" },
             { workerId: "a", item: "Lentes de seguridad", date: "2026-01-01", renewal: "2027-01-01" },
-            { workerId: "a", item: "Visera", date: "2026-01-01" },
+            { workerId: "a", item: "Guantes", date: "2026-01-01" },
+            { workerId: "a", item: "Zapatos de seguridad", date: "2026-01-01", renewal: "2027-01-01" },
             { workerId: "a", item: "Ropa uniforme", date: "2026-01-01", renewal: "2027-01-01" }
         ],
         insurance: [
@@ -1021,6 +1043,26 @@ test("workerCompliance da 100% cuando todo está vigente", () => {
     assert.equal(result.tone, "good");
     assert.ok(result.checks.every(check => check.status === "ok"));
     assert.equal(M.workerCompliance(complianceState(), "zzz", TODAY), null);
+});
+
+test("vigencias desconocidas no se acreditan y los datos originales se conservan", () => {
+    const source = complianceState({
+        insurance: [{ workerId: "a", type: "SCTR", end: "" }, { workerId: "a", type: "Vida Ley", end: "2026-02-30" }],
+        medical: [{ workerId: "a", date: "2026-02-01", result: "Apto", expiry: "" }]
+    });
+    source.workers[0].license = "A-I";
+    const snapshot = JSON.stringify(source);
+    const checks = Object.fromEntries(M.workerCompliance(source, "a", TODAY).checks.map(item => [item.key, item]));
+    for (const key of ["sctr", "vidaley", "emo", "license"]) assert.equal(checks[key].status, "missing", key);
+    assert.equal(JSON.stringify(source), snapshot);
+});
+
+test("horas manuales rechazan un mes inexistente y no alteran la jornada vigente", () => {
+    for (const month of ["2026-13", "2026-00", "2026-1", "enero", "0000-01"]) {
+        assert.equal(M.upsertHours([], month, 100, "x"), null, month);
+    }
+    assert.equal(M.HOURS_PER_WORKDAY, 10);
+    assert.equal(M.TRAINING_PASS_GRADE, 15);
 });
 
 test("workerCompliance detecta faltantes, vencidos, por vencer y No apto", () => {

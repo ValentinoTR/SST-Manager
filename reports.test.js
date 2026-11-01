@@ -262,7 +262,7 @@ test("HTML y Excel exportan las horas hombre calculadas y el detalle mensual", (
     const report = R.buildReport(hoursState(), { type: "mensual", month: "2026-09" }, TODAY);
     const html = R.toHtml(report);
     assert.match(html, /<strong>20<\/strong>\s*<span>Horas hombre trabajadas<\/span>/);
-    assert.match(html, /<th>Horas hombre<\/th>/);
+    assert.match(html, /<th\b[^>]*>Horas hombre<\/th>/);
     assert.match(html, /<td>Septiembre 2026<\/td><td>2<\/td><td>20<\/td>/);
     const files = xlsxFiles(R.toXlsx(report));
     assert.match(files.get("xl/workbook.xml"), /name="Horas hombre trabajadas"/);
@@ -273,4 +273,84 @@ test("HTML y Excel exportan las horas hombre calculadas y el detalle mensual", (
     assert.match(hoursSheet, /Septiembre 2026/);
     assert.match(hoursSheet, /<c r="B2"><v>2<\/v><\/c>/);
     assert.match(hoursSheet, /<c r="C2"><v>20<\/v><\/c>/);
+});
+
+test("fechas, área y trabajador se intersectan sin modificar los registros", () => {
+    const source = hoursState();
+    const snapshot = JSON.stringify(source);
+    const report = R.buildReport(source, {
+        type: "anual", year: "2026", filterArea: "TALLER", filterWorkerId: "a",
+        dateFrom: "2026-09-02", dateTo: "2026-10-01"
+    }, TODAY);
+    assert.equal(section(report, "colaboradores").rows.length, 1);
+    assert.equal(section(report, "colaboradores").rows[0][0], "Ana");
+    assert.equal(value(report, "Horas hombre trabajadas"), 10);
+    assert.equal(section(report, "epp").rows.length, 0); // entrega fuera del intervalo
+    assert.ok(!section(report, "hallazgos"));
+    assert.match(report.scopeLabel, /02\/09\/2026 a 01\/10\/2026/);
+    assert.equal(JSON.stringify(source), snapshot);
+});
+
+test("el intervalo respeta el mes seleccionado y rechaza fechas inválidas o invertidas", () => {
+    const report = R.buildReport(hoursState(), {
+        type: "mensual", month: "2026-09", dateFrom: "2026-09-02", dateTo: "2026-10-02"
+    }, TODAY);
+    assert.equal(value(report, "Horas hombre trabajadas"), 0);
+    for (const options of [
+        { dateFrom: "2026-02-30" }, { dateTo: "2026-13-01" },
+        { dateFrom: "2026-10-05", dateTo: "2026-10-04" }
+    ]) assert.throws(() => R.buildReport(state, { type: "anual", year: "2026", ...options }, TODAY), RangeError);
+});
+
+test("filtros por área vacía o trabajador sin coincidencia no filtran a otras personas", () => {
+    const area = R.buildReport(state, { type: "mensual", month: "2026-10", filterArea: "Oficina" }, TODAY);
+    assert.equal(section(area, "colaboradores").rows[0][0], "Beto");
+    assert.equal(section(area, "hallazgos").rows.length, 0);
+    const missing = R.buildReport(state, { type: "anual", year: "2026", filterWorkerId: "no-existe" }, TODAY);
+    assert.equal(section(missing, "colaboradores").rows.length, 0);
+    assert.equal(section(missing, "incidentes").rows.length, 0);
+    assert.equal(value(missing, "Horas hombre trabajadas"), 0);
+});
+
+test("pólizas sin vencimiento válido no se suman como vigentes y mantienen el historial", () => {
+    const source = { ...state, insurance: [...state.insurance,
+        { workerId: "a", type: "Vida Ley", end: "" },
+        { workerId: "b", type: "Vida Ley", end: "2026-02-30" }
+    ] };
+    const report = R.buildReport(source, { type: "anual", year: "2026" }, TODAY);
+    assert.equal(value(report, "Seguros vigentes"), 1);
+    assert.equal(value(report, "Seguros vencidos"), 1);
+    assert.equal(section(report, "seguros").rows.length, 4);
+    assert.equal(section(report, "seguros").rows[3][6], "Fecha inválida");
+});
+
+test("Excel conserva filtros, notas, texto literal y configuración de impresión A4", () => {
+    const report = R.buildReport(state, { type: "anual", year: "2026" }, TODAY);
+    report.sections[0].rows[0][0] = '=HYPERLINK("https://example.test")';
+    const files = xlsxFiles(R.toXlsx(report));
+    const first = files.get("xl/worksheets/sheet2.xml");
+    assert.match(first, /state="frozen"/);
+    assert.match(first, /<autoFilter ref="A1:F3"/);
+    assert.match(first, /paperSize="9" orientation="landscape"/);
+    assert.match(first, /&amp;P de &amp;N/);
+    assert.match(first, /t="inlineStr"[^>]*><is><t[^>]*>=HYPERLINK/);
+    assert.doesNotMatch(first, /<f>/); // datos editables nunca se convierten en fórmulas
+    assert.match(files.get("xl/styles.xml"), /wrapText="1"/);
+    assert.match(files.get("xl/workbook.xml"), /_xlnm.Print_Titles/);
+    assert.match(files.get("xl/worksheets/sheet1.xml"), /no acredita cumplimiento legal/);
+    const trainingIndex = report.sections.findIndex(item => item.key === "capacitaciones") + 2;
+    assert.match(files.get(`xl/worksheets/sheet${trainingIndex}.xml`), /No incluyen el módulo de charlas diarias/);
+});
+
+test("HTML mantiene el alcance, las notas y las tablas accesibles listas para A4", () => {
+    const report = R.buildReport(state, { type: "mensual", month: "2026-10" }, TODAY);
+    report.notes.push('<script>alert("no")</script>');
+    const html = R.toHtml(report);
+    assert.match(html, /@page \{ size: A4 landscape/);
+    assert.match(html, /thead \{ display: table-header-group/);
+    assert.match(html, /<th scope="col">Nombre/);
+    assert.match(html, /<footer>/);
+    assert.ok(!html.includes("<script>"));
+    assert.ok(html.includes("&lt;script&gt;"));
+    assert.match(html, /No incluyen el módulo de charlas diarias/);
 });

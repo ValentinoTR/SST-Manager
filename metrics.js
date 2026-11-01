@@ -124,7 +124,7 @@
     }
 
     function daysUntil(dateString, todayString) {
-        if (!dateString) {
+        if (!validAttendanceDate(dateString) || !validAttendanceDate(todayString)) {
             return null;
         }
         return Math.round((utcDay(dateString) - utcDay(todayString)) / 86400000);
@@ -138,6 +138,10 @@
         }
 
         const days = daysUntil(dateString, todayString);
+
+        if (days === null) {
+            return { status: "nodate", text: "Fecha inválida", className: "badge-gray", days: null };
+        }
 
         if (days < 0) {
             return { status: "expired", text: "Vencido", className: "badge-red", days };
@@ -221,9 +225,6 @@
 
                 if (last.renewal) {
                     status = expirationState(last.renewal, todayString).status;
-                    if (status === "nodate") {
-                        status = "ok";
-                    }
                 }
 
                 summary.delivered += 1;
@@ -659,7 +660,7 @@
 
         const value = Number(hours);
 
-        if (!month || hours === "" || hours == null || !Number.isFinite(value) || value < 0) {
+        if (!daysInAttendanceMonth(month) || hours === "" || hours == null || !Number.isFinite(value) || value < 0) {
             return null;
         }
 
@@ -792,10 +793,10 @@
                 title: "Indicadores proactivos",
                 items: [
                     gauge(
-                        "training", "Charlas frente a la meta",
+                        "training", "Capacitaciones frente a la meta",
                         training.monthGoal ? ratio(training.monthDone, training.monthGoal) : null,
                         training.monthGoal
-                            ? `${training.monthDone} de ${training.monthGoal} charlas`
+                            ? `${training.monthDone} de ${training.monthGoal} capacitaciones`
                             : "Define tu meta"
                     ),
                     gauge(
@@ -852,7 +853,7 @@
             { key: "workers", label: "Colaboradores activos", value: activeWorkers(state).length, sub: "Personal registrado" },
             { key: "hours", label: `Horas acumuladas ${year}`, value: hours.total, sub: `${hours.registeredMonths}/12 meses registrados` },
             {
-                key: "training", label: "Charlas del mes", value: training.monthDone,
+                key: "training", label: "Capacitaciones del mes", value: training.monthDone,
                 sub: training.monthGoal ? `Meta: ${training.monthGoal}` : "Sin meta definida"
             },
             { key: "findings", label: "Hallazgos observados", value: observed, sub: `${closed} ${closed === 1 ? "levantado" : "levantados"} · ${openThisMonth} ${openThisMonth === 1 ? "pendiente" : "pendientes"}` },
@@ -1107,7 +1108,7 @@
     function lastEventStats(state, todayString) {
 
         const events = (state.incidents || [])
-            .filter(item => /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")))
+            .filter(item => validAttendanceDate(item.date))
             .sort((a, b) =>
                 String(b.date).localeCompare(String(a.date)) ||
                 String(b.id || "").localeCompare(String(a.id || "")))
@@ -1223,7 +1224,7 @@
 
     function dateState(date, todayString) {
         const info = expirationState(date, todayString);
-        return info.status === "nodate" ? "ok" : info.status;
+        return info.status === "nodate" ? "missing" : info.status;
     }
 
     function workerCompliance(state, workerId, todayString) {
