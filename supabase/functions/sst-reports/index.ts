@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { createReport } from './pdf.mjs';
+import { createReport, createMailTest } from './pdf.mjs';
 import { decryptCredential } from '../_shared/gmail-credentials.mjs';
 
 const env=(key:string)=>Deno.env.get(key)||'';
@@ -23,7 +23,7 @@ async function sendGmail(job:any,pdf:Uint8Array,token:string){
  if(!safeEmail.test(job.recipient)||job.sender!=='educornejoperea28@gmail.com')throw new Error('Configuración de correo inválida.');
  if(pdf.length>18000000)throw new Error('PDF demasiado grande para Gmail; descárgalo y reduce las fotografías en una corrección.');
  const boundary='sst_'+job.id,encoded=base64(pdf).match(/.{1,76}/g)?.join('\r\n')||'';
- const mail=[`From: SST Control <${job.sender}>`,`To: ${job.recipient}`,`Subject: SST - reporte ${job.document_id} v${job.revision}`,`Message-ID: <sst-${job.id}@sst-manager.local>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',base64(new TextEncoder().encode('Se adjunta el reporte de seguridad registrado en SST-Manager. Incluye resultados conformes y observaciones. Consulte el historial para verificar correcciones posteriores.')),`--${boundary}`,'Content-Type: application/pdf',`Content-Disposition: attachment; filename="SST-${job.document_id}-v${job.revision}.pdf"`,'Content-Transfer-Encoding: base64','',encoded,`--${boundary}--`,''].join('\r\n');
+ const mail=[`From: SST Control <${job.sender}>`,`To: ${job.recipient}`,`Subject: ${job.test?'SST-Manager - PRUEBA TECNICA DE CORREO':'SST - reporte '+job.document_id+' v'+job.revision}`,`Message-ID: <sst-${job.id}@sst-manager.local>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',base64(new TextEncoder().encode(job.test?'Prueba técnica de la conexión de correo de SST-Manager. El PDF adjunto no es un registro de inspección ni de charla y no contiene datos de trabajadores.':'Se adjunta el reporte de seguridad registrado en SST-Manager. Incluye resultados conformes y observaciones. Consulte el historial para verificar correcciones posteriores.')),`--${boundary}`,'Content-Type: application/pdf',`Content-Disposition: attachment; filename="SST-${job.document_id}-v${job.revision}.pdf"`,'Content-Transfer-Encoding: base64','',encoded,`--${boundary}--`,''].join('\r\n');
  let r:Response;
  try{r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({raw:base64(new TextEncoder().encode(mail)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}),signal:AbortSignal.timeout(30000)});}catch{throw new UncertainSend('No se pudo confirmar el envío. Verificar en Gmail antes de reenviar.');}
  if(r.status>=500)throw new UncertainSend('Gmail no confirmó el resultado. Verificar antes de reenviar.');
@@ -62,6 +62,13 @@ Deno.serve(async(req:Request)=>{
   // Scheduler secret is generated/stored inside PostgreSQL and never exposed to clients.
   let owner:string|null=null;
   const scheduler=await value(db.rpc('sst_is_report_worker',{candidate:bearer}));
+  // Administrative smoke test: fixed recipient/content; no operational records created.
+  if(new URL(req.url).pathname.endsWith('/test')){
+   if(!scheduler)return response({error:'Prueba reservada al administrador del servidor.'},403);
+   const id=crypto.randomUUID();
+   const providerId=await sendGmail({id,sender:'educornejoperea28@gmail.com',recipient:'seguridad@reliper.pe',document_id:'PRUEBA-CONEXION',revision:1,test:true},await createMailTest(),await gmailToken());
+   return response({status:'sent',provider_id:providerId,recipient:'seguridad@reliper.pe',test:true});
+  }
   if(!scheduler){
    const {data,error}=await db.auth.getUser(bearer);if(error||!data.user)return response({error:'Sesión inválida.'},401);owner=data.user.id;
   }

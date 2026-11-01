@@ -2,9 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {PDFDocument} from 'pdf-lib';
-import {createReport} from '../supabase/functions/sst-reports/pdf.mjs';
+import {createReport,createMailTest} from '../supabase/functions/sst-reports/pdf.mjs';
 import C from '../safety-core.js';
 const version={document_id:'30000000-0000-4000-8000-000000000001',revision:1,actor:'inspector@example.test',reason:'Registro de prueba',recorded_at:'2026-10-31T12:00:00Z'};
+test('PDF técnico de correo es independiente de los registros SST',async()=>{
+ const bytes=await createMailTest(),pdf=await PDFDocument.load(bytes);assert.equal(pdf.getPageCount(),1);assert.match(pdf.getTitle(),/Prueba técnica/);await mkdir('tmp/pdfs',{recursive:true});await writeFile('tmp/pdfs/correo-tecnico.pdf',bytes);
+});
 test('PDF de inspección con fotografía, texto extenso y falla crítica',async()=>{
  const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));
  const bytes=await createReport({...version,kind:'inspection',payload:{vehicle:{plate:'ABC123',type:'Camioneta',brand:'Marca',model:'Modelo'},items:C.checklist.map((c,n)=>({...c,status:n===1?'No conforme':'Conforme',note:n===1?'Frenos sin presión. Reparar y verificar antes de operar. '.repeat(8):'',photo:n===1?'test/photo':null})),notes:'Observación de seguridad. '.repeat(40)}},[{item_id:'brakes',note:'Frenos sin presión',document_id:version.document_id,resolved_at:null}],async()=>png);
