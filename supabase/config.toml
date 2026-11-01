@@ -1,3 +1,7 @@
 [functions.sst-reports]
 # Function validates Supabase users and the server-only scheduler secret itself.
 verify_jwt = false
+
+[functions.sst-gmail-setup]
+# One-use admin-issued ticket, state, HttpOnly cookie and PKCE protect OAuth.
+verify_jwt = false

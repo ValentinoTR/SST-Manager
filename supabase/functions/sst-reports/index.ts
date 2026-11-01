@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createReport } from './pdf.mjs';
+import { decryptCredential } from '../_shared/gmail-credentials.mjs';
 
 const env=(key:string)=>Deno.env.get(key)||'';
 const origin=env('APP_ORIGIN')||'https://valentinotr.github.io';
@@ -9,8 +10,11 @@ const db=createClient(env('SUPABASE_URL'),env('SUPABASE_SERVICE_ROLE_KEY'),{auth
 async function value(query:PromiseLike<any>){const {data,error}=await query;if(error)throw new Error('Error de almacenamiento o base de datos.');return data;}
 const base64=(bytes:Uint8Array)=>{let s='';for(let n=0;n<bytes.length;n+=8192)s+=String.fromCharCode(...bytes.subarray(n,n+8192));return btoa(s);};
 async function gmailToken(){
- if(!env('GMAIL_CLIENT_ID')||!env('GMAIL_CLIENT_SECRET')||!env('GMAIL_REFRESH_TOKEN'))throw new Error('Falta autorizar Gmail en los secretos del servidor.');
- const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({client_id:env('GMAIL_CLIENT_ID'),client_secret:env('GMAIL_CLIENT_SECRET'),refresh_token:env('GMAIL_REFRESH_TOKEN'),grant_type:'refresh_token'}),signal:AbortSignal.timeout(20000)});
+ if(!env('GMAIL_CLIENT_ID')||!env('GMAIL_CLIENT_SECRET'))throw new Error('Falta autorizar Gmail en los secretos del servidor.');
+ const connection=await value(db.from('sst_gmail_connection').select('email,iv,ciphertext').eq('singleton',true).maybeSingle());
+ const refresh=connection?await decryptCredential(connection,env('GMAIL_CLIENT_SECRET')):env('GMAIL_REFRESH_TOKEN');
+ if(!refresh)throw new Error('Falta autorizar Gmail en los secretos del servidor.');
+ const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({client_id:env('GMAIL_CLIENT_ID'),client_secret:env('GMAIL_CLIENT_SECRET'),refresh_token:refresh,grant_type:'refresh_token'}),signal:AbortSignal.timeout(20000)});
  if(!r.ok)throw new Error('La autorización de Gmail requiere revisión.');const data=await r.json();if(!data.access_token)throw new Error('Gmail no devolvió una autorización válida.');return data.access_token;
 }
 class UncertainSend extends Error{}
