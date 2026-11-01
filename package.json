@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test safety.test.js tests/database.test.mjs tests/pdf.test.mjs tests/edge.test.mjs tests/gmail-setup.test.mjs",
+    "test": "node --test safety.test.js tests/database.test.mjs tests/pdf.test.mjs tests/edge.test.mjs tests/gmail-setup.test.mjs tests/reliper.test.mjs",
     "test:legacy": "node --test metrics.test.js reports.test.js",
     "preview": "node tests/serve.mjs"
   },

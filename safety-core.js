@@ -23,6 +23,7 @@
         return {total, present, absent: total - present, percent: total ? Math.round(present / total * 10000) / 100 : 0};
     }
     function aptitude(payload, defects = []) {
+        if (payload?.template === 'reliper-light-v1' && payload.reliper?.fatigue?.some((v,n) => typeof v === 'boolean' && (n < 5 ? !v : v))) return 'No apto';
         if (defects.some(d => !d.resolved_at) || payload?.items?.some(i => critical(i) && i.status === 'No conforme')) return 'No apto';
         if (!payload?.items?.length) return 'Sin inspección';
         return payload.items.some(i => i.status === 'No conforme') ? 'Con observaciones' : 'Apto';

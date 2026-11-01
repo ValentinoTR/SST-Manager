@@ -31,4 +31,20 @@
 .safety-images { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
 .safety-images img { max-width:220px; max-height:180px; object-fit:contain; }
 .safety-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.reliper-heading { display:flex; align-items:stretch; background:#004aa5; color:white; margin:12px 0 20px; border-radius:8px; overflow:hidden; }
+.reliper-heading>strong { display:flex; align-items:center; background:#ffdf22; color:#004aa5; padding:20px; font-size:24px; }
+.reliper-heading>div { padding:16px; font-size:18px; font-weight:700; }
+.reliper-heading small { display:block; margin-top:6px; font-size:12px; font-weight:400; }
+.reliper-section { border:1px solid var(--border); border-radius:10px; padding:16px; margin:16px 0; }
+.reliper-section summary { font-weight:700; cursor:pointer; padding:6px 0; }
+.reliper-fatigue { display:grid; gap:14px; margin:16px 0; }
+.reliper-fatigue label { grid-template-columns:minmax(0,1fr) 120px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); line-height:1.5; }
+.reliper-dot { white-space:nowrap; font-size:12px; letter-spacing:1px; }
+.reliper-dot.red { color:#b71c26; }.reliper-dot.yellow { color:#906000; }.reliper-dot.green { color:#166b35; }
+.reliper-pause { display:grid; grid-template-columns:minmax(0,1fr) 130px 95px; gap:12px; margin:14px 0; }
+.reliper-signatures { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.reliper-signatures canvas { width:100%; max-width:300px; height:100px; }
+.safety-dialog .reliper-check { display:flex; align-items:flex-start; gap:8px; }
+.reliper-check input[type=checkbox] { flex:0 0 18px; width:18px; height:18px; margin-top:2px; }
+@media(max-width:680px) { .reliper-heading { flex-direction:column; }.reliper-heading>strong { padding:10px 16px; }.reliper-fatigue label,.reliper-pause,.reliper-signatures { grid-template-columns:1fr; }.reliper-section { padding:12px; } }
 @media(max-width:680px) { .safety-grid { grid-template-columns:1fr; } .safety-component { grid-template-columns:1fr; } .safety-dialog { padding:16px; } .safety-card { padding:16px; } .safety-toolbar { align-items:stretch; } }
