@@ -3349,6 +3349,24 @@ function setBoard(id, html) {
 
 }
 
+const expandedBoardWorkerLists = new Set();
+
+function boardWorkerPreview(id, rows, render) {
+    const expanded = expandedBoardWorkerLists.has(id);
+    const toggle = document.getElementById(id + "Toggle");
+    if (toggle) {
+        toggle.hidden = rows.length <= 5;
+        toggle.textContent = expanded ? "Mostrar solo 5" : `Ver todos (${rows.length})`;
+        toggle.setAttribute("aria-expanded", String(expanded));
+        toggle.onclick = () => {
+            if (expandedBoardWorkerLists.has(id)) expandedBoardWorkerLists.delete(id);
+            else expandedBoardWorkerLists.add(id);
+            render();
+        };
+    }
+    return expanded ? rows : rows.slice(0, 5);
+}
+
 
 function emptyBoard(text) {
 
@@ -3465,6 +3483,8 @@ function renderBoardEpp() {
     const data =
         SSTMetrics.eppMatrix(dashboardState(), today());
 
+    const visibleRows = boardWorkerPreview("boardEpp", data.rows, renderBoardEpp);
+
     if (data.rows.length === 0) {
 
         setBoard(
@@ -3481,7 +3501,7 @@ function renderBoardEpp() {
     const summary = data.summary;
 
     const rows =
-        data.rows.map(row => {
+        visibleRows.map(row => {
 
             const missing =
                 row.cells.filter(
@@ -3539,14 +3559,14 @@ function renderBoardEpp() {
             <span><span class="mark mark-none">—</span> Sin entrega</span>
         </div>
 
+        <p class="board-list-count" role="status">Mostrando ${visibleRows.length} de ${data.rows.length} trabajadores. Los totales incluyen a todo el personal del filtro.</p>
+
     `);
 
 }
 
 
 /* ---------- Vencimiento de SCTR y Vida Ley ---------- */
-
-let boardInsuranceExpanded = false;
 
 const INSURANCE_BADGES = {
     ok:      "badge-green",
@@ -3597,16 +3617,7 @@ function renderBoardInsurance() {
     const data =
         SSTMetrics.insuranceTable(dashboardState(), today());
 
-    const toggle = document.getElementById("boardInsuranceToggle");
-    if (toggle) {
-        toggle.hidden = data.rows.length <= 5;
-        toggle.textContent = boardInsuranceExpanded ? "Mostrar solo 5" : `Ver todos (${data.rows.length})`;
-        toggle.setAttribute("aria-expanded", String(boardInsuranceExpanded));
-        toggle.onclick = () => {
-            boardInsuranceExpanded = !boardInsuranceExpanded;
-            renderBoardInsurance();
-        };
-    }
+    const visibleRows = boardWorkerPreview("boardInsurance", data.rows, renderBoardInsurance);
 
     if (data.rows.length === 0) {
 
@@ -3621,7 +3632,7 @@ function renderBoardInsurance() {
     const summary = data.summary;
 
     const rows =
-        (boardInsuranceExpanded ? data.rows : data.rows.slice(0, 5)).map(row => `
+        visibleRows.map(row => `
 
             <tr>
                 <td>${boardWorkerCell(row.worker)}</td>
@@ -3658,7 +3669,7 @@ function renderBoardInsurance() {
             </table>
         </div>
 
-        <p class="board-list-count" role="status">Mostrando ${boardInsuranceExpanded ? data.rows.length : Math.min(5, data.rows.length)} de ${data.rows.length} trabajadores. Los totales incluyen a todo el personal del filtro.</p>
+        <p class="board-list-count" role="status">Mostrando ${visibleRows.length} de ${data.rows.length} trabajadores. Los totales incluyen a todo el personal del filtro.</p>
 
     `);
 
@@ -4515,6 +4526,8 @@ function renderBoardAttendance() {
     const rows =
         SSTMetrics.attendanceByWorker(dashboardState(), boardMonth());
 
+    const visibleRows = boardWorkerPreview("boardAttendance", rows, renderBoardAttendance);
+
     if (rows.length === 0) {
 
         setBoard(
@@ -4543,7 +4556,7 @@ function renderBoardAttendance() {
 
     setBoard("boardAttendanceBody", `
 
-        ${attendanceBarsHtml(rows)}
+        ${attendanceBarsHtml(visibleRows)}
 
         <div class="table-wrap">
             <table class="board-table">
@@ -4558,7 +4571,7 @@ function renderBoardAttendance() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(row => `
+                    ${visibleRows.map(row => `
                         <tr>
                             <td>${boardWorkerCell(row.worker)}</td>
                             <td class="center">${row.days}</td>
@@ -4581,6 +4594,8 @@ function renderBoardAttendance() {
                 </tfoot>
             </table>
         </div>
+
+        <p class="board-list-count" role="status">Mostrando ${visibleRows.length} de ${rows.length} trabajadores. El total del equipo incluye a todo el personal del filtro.</p>
 
     `);
 
