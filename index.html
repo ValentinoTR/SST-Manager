@@ -14,11 +14,12 @@
 
 
 
-    <meta name="theme-color" content="#102d2e">
+    <meta name="theme-color" content="#102b5b">
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem("sst_ui_theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");}catch{}</script>
     <meta name="description" content="SST Control: colaboradores, prevención y seguimiento de seguridad y salud en el trabajo.">
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="workspace.css?v=20261013-attendance">
-    <link rel="stylesheet" href="safety.css?v=20261031">
+    <link rel="stylesheet" href="styles.css?v=20261101-audit">
+    <link rel="stylesheet" href="workspace.css?v=20261102-publicacion">
+    <link rel="stylesheet" href="safety.css?v=20261102-asistencia">
 
 </head>
 
@@ -462,7 +463,9 @@
                         <div id="filterMonths"></div>
                     </div>
 
-                    <input type="month" id="dashboardMonth" hidden>
+                    <label class="dashboard-area-label" for="dashboardArea">Área<select id="dashboardArea"><option value="">Todas las áreas</option></select></label>
+<p id="dashboardScope" class="filter-scope">Metas y programa anual: alcance general. EPP, seguros y alertas: estado actual.</p>
+<input type="month" id="dashboardMonth" hidden>
 
                 </aside>
 
@@ -478,6 +481,7 @@
                 <div class="pbi-tiles" id="boardTiles"></div>
 
                 <div class="pbi-gauges" id="boardGauges"></div>
+<article class="panel trend-panel"><div class="panel-header"><div><h3>Tendencia de asistencia</h3><p>Últimos seis meses del periodo elegido. Porcentaje sobre días registrados, excluye descansos.</p></div><span id="trendChange" class="trend-change"></span></div><div id="attendanceTrend" class="trend-chart" role="img" aria-label="Tendencia de asistencia"></div></article>
 
                 <div class="board-grid">
 
@@ -501,6 +505,7 @@
                                 <p>Fecha en que vence cada seguro por colaborador.</p>
                             </div>
                             <div class="board-actions">
+                                <button class="btn btn-light btn-small" id="boardInsuranceToggle" type="button" aria-controls="boardInsuranceBody" aria-expanded="false" hidden>Ver todos</button>
                                 <button class="btn btn-primary btn-small" data-action="new-insurance">+ Seguro</button>
                             </div>
                         </div>
@@ -510,8 +515,8 @@
                     <article class="panel" id="boardTraining">
                         <div class="panel-header">
                             <div>
-                                <h3>Capacitaciones y charlas</h3>
-                                <p>Charlas realizadas frente a tu meta.</p>
+                                <h3>Capacitaciones formales</h3>
+                                <p>Capacitaciones registradas frente a la meta. Las charlas diarias tienen su propio módulo.</p>
                             </div>
                             <div class="board-actions">
                                 <button class="btn btn-light btn-small" data-action="set-goals">Definir meta</button>
@@ -607,7 +612,7 @@
                     <div class="panel-header">
                         <div>
                             <h3>Asistencia registrada</h3>
-                            <p>Asistencias, inasistencias y tardanzas acumuladas.</p>
+                            <p>Días registrados en el mes y área elegidos.</p>
                         </div>
                     </div>
                     <div class="chart-body">
@@ -635,7 +640,7 @@
                     <div class="panel-header">
                         <div>
                             <h3>Alertas SST por tipo</h3>
-                            <p>Elementos que requieren seguimiento o renovación.</p>
+                            <p>Registros con vencimiento dentro de 30 días, incluidos los vencidos.</p>
                         </div>
                     </div>
                     <div class="chart-body">
@@ -1897,7 +1902,7 @@
 
                     </div>
 
-                    <button class="btn btn-primary btn-large" id="btnGenerateReport">
+                    <div class="report-params report-extra-filters"><div class="form-group"><label for="reportDateFrom">Desde (opcional)</label><input type="date" id="reportDateFrom"></div><div class="form-group"><label for="reportDateTo">Hasta (opcional)</label><input type="date" id="reportDateTo"></div></div><p class="muted-text">Los filtros se combinan con el periodo. Sin selección de área o trabajador, se incluyen todos.</p><button class="btn btn-primary btn-large" id="btnGenerateReport">
                         Generar reporte SST
                     </button>
 
@@ -1923,7 +1928,7 @@
                     </div>
                 </div>
 
-                <iframe
+                <iframe sandbox="allow-same-origin allow-modals"
                     class="report-preview"
                     id="reportPreview"
                     title="Vista previa del reporte"
@@ -2108,152 +2113,19 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
 <script src="supabase-config.js"></script>
-<script src="metrics.js?v=20261013-attendance"></script>
-<script src="reports.js?v=20261013-attendance"></script>
-<script src="app.js?v=20261031-safety"></script>
-<script>
-(function () {
-    const byId = (id) => document.getElementById(id);
-
-    function safeNumber(value) {
-        const number = Number(String(value || "").replace(/[^0-9.-]/g, ""));
-        return Number.isFinite(number) ? number : 0;
-    }
-
-    function cleanLabel(value, fallback) {
-        const label = String(value || "").trim();
-        return label || fallback;
-    }
-
-    function renderVerticalChart(containerId, data, emptyText) {
-        const container = byId(containerId);
-        if (!container) return;
-
-        const filtered = data.filter((item) => item.value > 0);
-        if (!filtered.length) {
-            container.innerHTML = `<div class="chart-empty">${emptyText}</div>`;
-            return;
-        }
-
-        const max = Math.max(...filtered.map((item) => item.value), 1);
-        container.innerHTML = filtered.map((item) => {
-            const height = Math.max(10, Math.round((item.value / max) * 100));
-            return `
-                <div class="vbar-item" title="${item.label}: ${item.value}">
-                    <strong class="vbar-value">${item.value}</strong>
-                    <div class="vbar-track">
-                        <div class="vbar-fill" style="height:${height}%"></div>
-                    </div>
-                    <span class="vbar-label">${item.label}</span>
-                </div>
-            `;
-        }).join("");
-    }
-
-    function getWorkerRows() {
-        return [...document.querySelectorAll("#workersTbody tr")].filter((row) => row.cells.length >= 6);
-    }
-
-    function updateAreaChart() {
-        const counts = new Map();
-        getWorkerRows().forEach((row) => {
-            const area = cleanLabel(row.cells[3]?.textContent, "Sin área");
-            const estado = String(row.cells[5]?.textContent || "").toLowerCase();
-            if (!estado.includes("inactiv")) counts.set(area, (counts.get(area) || 0) + 1);
-        });
-
-        const data = [...counts.entries()]
-            .map(([label, value]) => ({ label, value }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 8);
-
-        renderVerticalChart("areaChart", data, "Sin datos registrados");
-    }
-
-    function updateAttendanceChart() {
-        let asistencias = 0;
-        let inasistencias = 0;
-        let tardanzas = 0;
-
-        [...document.querySelectorAll("#attendanceTbody tr")].forEach((row) => {
-            if (row.cells.length < 5) return;
-            asistencias += safeNumber(row.cells[2]?.textContent);
-            inasistencias += safeNumber(row.cells[3]?.textContent);
-            tardanzas += safeNumber(row.cells[4]?.textContent);
-        });
-
-        renderVerticalChart("attendanceChart", [
-            { label: "Asist.", value: asistencias },
-            { label: "Inasist.", value: inasistencias },
-            { label: "Tard.", value: tardanzas }
-        ], "Sin datos registrados");
-    }
-
-    function updateAlertsChart() {
-        const categories = { EPP: 0, Seguros: 0, Médicos: 0, Capacitaciones: 0, Otros: 0 };
-        const items = [...document.querySelectorAll("#alertsList .alert-item")];
-
-        items.forEach((item) => {
-            const text = String(item.textContent || "").toLowerCase();
-            if (text.includes("epp") || text.includes("equipo")) categories.EPP += 1;
-            else if (text.includes("seguro") || text.includes("póliza") || text.includes("poliza")) categories.Seguros += 1;
-            else if (text.includes("médic") || text.includes("medic") || text.includes("examen")) categories.Médicos += 1;
-            else if (text.includes("capacit") || text.includes("curso")) categories.Capacitaciones += 1;
-            else categories.Otros += 1;
-        });
-
-        const data = Object.entries(categories).map(([label, value]) => ({ label, value }));
-        renderVerticalChart("alertsChart", data, "Sin alertas registradas");
-    }
-
-    function updateDashboardTable() {
-        const target = byId("dashboardWorkersTbody");
-        if (!target) return;
-
-        const rows = getWorkerRows().slice(0, 8);
-        if (!rows.length) {
-            target.innerHTML = `<tr class="dashboard-empty-row"><td colspan="4">Sin colaboradores registrados.</td></tr>`;
-            return;
-        }
-
-        target.innerHTML = rows.map((row) => {
-            const worker = row.cells[0]?.innerHTML || "—";
-            const cargo = row.cells[2]?.textContent?.trim() || "—";
-            const area = row.cells[3]?.textContent?.trim() || "—";
-            const estado = row.cells[5]?.innerHTML || "—";
-            return `<tr><td>${worker}</td><td>${cargo}</td><td>${area}</td><td>${estado}</td></tr>`;
-        }).join("");
-    }
-
-    function refreshAnalytics() {
-        updateAreaChart();
-        updateAttendanceChart();
-        updateAlertsChart();
-        updateDashboardTable();
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-        refreshAnalytics();
-
-        ["workersTbody", "attendanceTbody", "alertsList"].forEach((id) => {
-            const node = byId(id);
-            if (!node) return;
-            new MutationObserver(refreshAnalytics).observe(node, { childList: true, subtree: true, characterData: true });
-        });
-
-        setTimeout(refreshAnalytics, 250);
-        setTimeout(refreshAnalytics, 1000);
-    });
-})();
-</script>
+<script src="workspace-core.js?v=20261101-audit"></script>
+<script src="metrics.js?v=20261101-audit"></script>
+<script src="reports.js?v=20261101-audit"></script>
+<script src="app.js?v=20261102-publicacion"></script>
 
 
 
 
-<script src="workspace.js?v=20261031"></script>
-<script src="cloud.js?v=20261031"></script>
-<script src="safety-core.js?v=20261031"></script>
-<script src="safety.js?v=20261031"></script>
+
+<script src="workspace.js?v=20261101-audit"></script>
+<script src="cloud.js?v=20261101-audit"></script>
+<script src="safety-core.js?v=20261101-audit"></script>
+<script type="module" src="safety.js?v=20261102-asistencia"></script>
 <script>window.SSTCloud.start();</script>
 </body>
 

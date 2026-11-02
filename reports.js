@@ -65,10 +65,21 @@
 
     /* ---------------------------------------------------------
        ARMADO DEL REPORTE
-       options: { type, month, year, workerId, area }
+       options: { type, month, year, workerId, area,
+                  dateFrom?, dateTo?, filterArea?, filterWorkerId? }
        --------------------------------------------------------- */
 
     function buildReport(state, options, todayString) {
+
+        const dateFrom = options.dateFrom || "";
+        const dateTo = options.dateTo || "";
+        if ((dateFrom && !M.validAttendanceDate(dateFrom)) ||
+            (dateTo && !M.validAttendanceDate(dateTo))) {
+            throw new RangeError("Selecciona fechas de inicio y fin válidas.");
+        }
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            throw new RangeError("La fecha de inicio no puede ser posterior a la fecha de fin.");
+        }
 
         const type = options.type || "mensual";
         const workers = state.workers || [];
@@ -114,6 +125,35 @@
                 sameArea(incident.area, area) ||
                 scopeWorkers.some(worker => worker.id === incident.workerId);
             includeByArea = item => sameArea(item.area, area);
+        }
+
+        // Los filtros adicionales intersectan el alcance original, sin modificar el estado.
+        const filterArea = String(options.filterArea || "").trim();
+        const filterWorkerId = options.filterWorkerId;
+        const hasWorkerFilter = filterWorkerId !== undefined && filterWorkerId !== null && filterWorkerId !== "";
+        if (filterArea) {
+            scopeWorkers = scopeWorkers.filter(worker => sameArea(worker.area, filterArea));
+            scopeLabel += ` · Área: ${filterArea}`;
+        }
+        if (hasWorkerFilter) {
+            scopeWorkers = scopeWorkers.filter(worker => worker.id === filterWorkerId);
+            scopeLabel += ` · Colaborador: ${nameOf(filterWorkerId)}`;
+        }
+        const periodMatches = inPeriod;
+        inPeriod = date => M.validAttendanceDate(date) && periodMatches(date) &&
+            (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo);
+        if (dateFrom || dateTo) {
+            scopeLabel += ` · ${dateFrom ? fmtDate(dateFrom) : "Inicio del historial"} a ${dateTo ? fmtDate(dateTo) : "Fin del historial"}`;
+        }
+        const incidentMatches = includeIncident;
+        includeIncident = item => incidentMatches(item) &&
+            (!filterArea || sameArea(item.area, filterArea) || scopeWorkers.some(worker => worker.id === item.workerId)) &&
+            (!hasWorkerFilter || item.workerId === filterWorkerId);
+        if (hasWorkerFilter) {
+            includeByArea = null;
+        } else if (includeByArea && filterArea) {
+            const areaMatches = includeByArea;
+            includeByArea = item => areaMatches(item) && sameArea(item.area, filterArea);
         }
 
         const ids = new Set(scopeWorkers.map(worker => worker.id));
@@ -183,6 +223,7 @@
         sections.push({
             key: "capacitaciones",
             title: "Capacitaciones",
+            note: "Registros individuales de capacitación; los totales realizados, aprobados y desaprobados cuentan registros por colaborador. No incluyen el módulo de charlas diarias ni acreditan por sí solos una capacitación formal.",
             columns: ["Colaborador", "Capacitación", "Fecha", "Entidad / instructor", "Nota", "Estado"],
             rows: training.map(item => [
                 nameOf(item.workerId), item.topic, fmtDate(item.date),
@@ -312,7 +353,7 @@
             { label: "Entregas de EPP", value: epp.length },
             {
                 label: "Seguros vigentes",
-                value: countBy(insurance, item => M.expirationState(item.end, todayString).status !== "expired")
+                value: countBy(insurance, item => ["ok", "due"].includes(M.expirationState(item.end, todayString).status))
             },
             {
                 label: "Seguros vencidos",
@@ -346,6 +387,10 @@
             title: "Reporte SST",
             scopeLabel,
             generated: fmtDate(todayString),
+            notes: [
+                "Fuente: registros guardados en SST-Manager. Los filtros de fechas se aplican a los eventos; colaboradores, seguros e IPERC muestran el estado registrado a la fecha de generación.",
+                "Reporte de gestión con datos personales. Su contenido y evidencias requieren revisión del responsable; este resumen no acredita cumplimiento legal ni reemplaza los registros exigibles."
+            ],
             summary,
             sections
         };
@@ -370,7 +415,7 @@
             .map(section => {
 
                 const head = section.columns
-                    .map(column => `<th>${escapeHtml(column)}</th>`)
+                    .map(column => `<th scope="col">${escapeHtml(column)}</th>`)
                     .join("");
 
                 const body = section.rows.length
@@ -384,10 +429,10 @@
                         <h2>${escapeHtml(section.title)}
                             <small>${section.rows.length} registro(s)</small></h2>
                         ${section.note ? `<p class="note">${escapeHtml(section.note)}</p>` : ""}
-                        <table>
+                        <div class="table-scroll"><table aria-label="${escapeHtml(section.title)}">
                             <thead><tr>${head}</tr></thead>
                             <tbody>${body}</tbody>
-                        </table>
+                        </table></div>
                     </section>`;
             })
             .join("");
@@ -399,33 +444,57 @@
 <title>${escapeHtml(report.title)} - ${escapeHtml(report.scopeLabel)}</title>
 <style>
     * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; color: #17212b; margin: 24px; font-size: 12px; }
-    header { border-bottom: 3px solid #0f5c75; padding-bottom: 10px; margin-bottom: 16px; }
-    header h1 { font-size: 22px; color: #0f5c75; }
-    header p { color: #6b7887; margin-top: 4px; }
-    .kpis { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-    .kpi { border: 1px solid #dce5eb; border-radius: 8px; padding: 8px 12px; min-width: 130px; }
-    .kpi strong { display: block; font-size: 20px; color: #0f5c75; }
-    .kpi span { font-size: 10px; color: #6b7887; }
-    section { margin-bottom: 18px; page-break-inside: avoid; }
-    h2 { font-size: 14px; margin-bottom: 6px; color: #093f52; }
-    h2 small { font-weight: normal; color: #6b7887; margin-left: 6px; }
-    .note { color: #6b7887; font-size: 10px; margin-bottom: 4px; }
+    @page { size: A4 landscape; margin: 14mm 12mm 16mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #17212b; margin: 24px; font-size: 11px; line-height: 1.45; }
+    header { border-bottom: 3px solid #0642b0; padding-bottom: 12px; margin-bottom: 18px; }
+    .brand { margin: 0 0 6px; font-size: 10px; letter-spacing: 1.5px; font-weight: 700; color: #0642b0; }
+    header h1 { margin: 0; font-size: 24px; color: #093f52; }
+    header p { color: #526170; margin: 6px 0 0; overflow-wrap: anywhere; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 8px; margin-bottom: 20px; }
+    .kpi { border: 1px solid #dce5eb; border-radius: 6px; padding: 9px 12px; break-inside: avoid; }
+    .kpi strong { display: block; font-size: 20px; color: #0642b0; }
+    .kpi span { font-size: 10px; color: #526170; }
+    section { margin-bottom: 22px; }
+    h2 { font-size: 14px; margin: 0 0 7px; color: #093f52; break-after: avoid; }
+    h2 small { font-weight: normal; color: #526170; margin-left: 6px; white-space: nowrap; }
+    .note { color: #526170; font-size: 10px; margin: 4px 0 8px; }
+    .table-scroll { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th { background: #0f5c75; color: #fff; text-align: left; padding: 5px 6px; font-size: 10px; }
-    td { border-bottom: 1px solid #dce5eb; padding: 5px 6px; vertical-align: top; }
+    thead { display: table-header-group; }
+    th { background: #0642b0; color: #fff; text-align: left; padding: 7px; font-size: 10px; vertical-align: top; }
+    td { border-bottom: 1px solid #dce5eb; padding: 6px 7px; vertical-align: top; white-space: pre-wrap; }
+    th, td { overflow-wrap: anywhere; word-break: normal; }
+    tr { break-inside: avoid; }
     tr:nth-child(even) td { background: #f2f6f9; }
-    .empty { color: #6b7887; text-align: center; font-style: italic; }
-    @media print { body { margin: 10mm; } }
+    .empty { color: #526170; text-align: center; font-style: italic; }
+    footer { border-top: 1px solid #b9cbd5; padding-top: 8px; color: #526170; font-size: 9px; }
+    footer p { margin: 4px 0; }
+    @media (max-width: 600px) { body { margin: 14px; } .table-scroll table { min-width: 640px; } }
+    @media print {
+        body { margin: 0; font-size: 9px; }
+        .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .kpi { padding: 6px 8px; }
+        .kpi strong { font-size: 17px; }
+        .table-scroll { overflow: visible; }
+        .table-scroll table { min-width: 0; table-layout: fixed; }
+        th, td { padding: 5px; }
+        th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        footer { break-inside: avoid; }
+    }
 </style>
 </head>
 <body>
     <header>
+        <p class="brand">SST-MANAGER · GESTIÓN DE SEGURIDAD</p>
         <h1>${escapeHtml(report.title)}</h1>
         <p>${escapeHtml(report.scopeLabel)} · Generado el ${escapeHtml(report.generated)}</p>
     </header>
-    <div class="kpis">${kpis}</div>
-    ${sections}
+    <main><div class="kpis" aria-label="Resumen de indicadores">${kpis}</div>
+    ${sections}</main>
+    <footer><strong>SST-Manager · ${escapeHtml(report.scopeLabel)}</strong>
+        <p>Generado el ${escapeHtml(report.generated)}. Información para uso autorizado.</p>
+        ${(report.notes || []).map(note => `<p>${escapeHtml(note)}</p>`).join("")}
+    </footer>
 </body>
 </html>`;
     }
@@ -571,7 +640,13 @@
         return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
     }
 
-    function sheetXml(rows, widths) {
+    function sheetXml(rows, widths, options) {
+
+        const settings = options || {};
+        const headerRow = settings.headerRow || 1;
+        const lastColumn = columnName(widths.length - 1);
+        const dataEnd = settings.dataEnd || rows.length;
+        const lastRow = Math.max(1, rows.length);
 
         const cols = widths
             .map((width, index) =>
@@ -579,14 +654,24 @@
             .join("");
 
         const body = rows
-            .map((row, rowIndex) =>
-                `<row r="${rowIndex + 1}">${row.cells
+            .map((row, rowIndex) => {
+                const lines = Math.max(1, ...row.cells.map((value, index) =>
+                    String(value ?? "").split(/\r?\n/).reduce((sum, line) =>
+                        sum + Math.max(1, Math.ceil(line.length / Math.max(8, (widths[index] || 30) - 2))), 0)));
+                const height = row.style === 2 ? 28 : row.style === 1 ? Math.max(28, lines * 15) : Math.max(20, lines * 15);
+                return `<row r="${rowIndex + 1}" ht="${Math.min(409, height)}" customHeight="1">${row.cells
                     .map((value, colIndex) => cellXml(value, rowIndex, colIndex, row.style))
-                    .join("")}</row>`)
+                    .join("")}</row>`;
+            })
             .join("");
 
+        const merges = settings.merges || [];
+        const mergeXml = merges.length ? `<mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>` : "";
+        const literalHeader = value => String(value || "").replaceAll("&", "&&").slice(0, 110);
+        const header = xmlEscape(`&LSST-Manager&C${literalHeader(settings.title)}&R${literalHeader(settings.generated)}`);
+
         return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${cols}</cols><sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lastColumn}${lastRow}"/><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="${headerRow}" topLeftCell="A${headerRow + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${headerRow + 1}" sqref="A${headerRow + 1}"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols>${cols}</cols><sheetData>${body}</sheetData><autoFilter ref="A${headerRow}:${lastColumn}${dataEnd}"/>${mergeXml}<printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.6" bottom="0.6" header="0.25" footer="0.25"/><pageSetup paperSize="9" orientation="${widths.length > 5 ? "landscape" : "portrait"}" fitToWidth="1" fitToHeight="0"/><headerFooter><oddHeader>${header}</oddHeader><oddFooter>&amp;LInformación para uso autorizado&amp;CPágina &amp;P de &amp;N&amp;RSST-Manager</oddFooter></headerFooter></worksheet>`;
     }
 
     function sheetName(title, used) {
@@ -628,10 +713,17 @@
             { style: 1, cells: ["Indicador", "Valor"] },
             ...report.summary.map(item => ({ style: 0, cells: [item.label, item.value] }))
         ];
+        const summaryEnd = summaryRows.length;
+        const summaryMerges = ["A1:B1", "A2:B2", "A3:B3"];
+        (report.notes || []).forEach(note => {
+            summaryRows.push({ style: 3, cells: [note] });
+            summaryMerges.push(`A${summaryRows.length}:B${summaryRows.length}`);
+        });
 
         sheets.push({
             name: sheetName("Resumen", used),
-            xml: sheetXml(summaryRows, [38, 14])
+            headerRow: 5,
+            xml: sheetXml(summaryRows, [48, 22], { headerRow: 5, dataEnd: summaryEnd, merges: summaryMerges, title: report.scopeLabel, generated: report.generated })
         });
 
         report.sections.forEach(section => {
@@ -640,10 +732,18 @@
                 { style: 1, cells: section.columns },
                 ...section.rows.map(cells => ({ style: 0, cells }))
             ];
+            const dataEnd = rows.length;
+            const widths = widthsFor(rows, section.columns.length);
+            const merges = [];
+            if (section.note) {
+                rows.push({ style: 3, cells: [section.note] });
+                merges.push(`A${rows.length}:${columnName(section.columns.length - 1)}${rows.length}`);
+            }
 
             sheets.push({
                 name: sheetName(section.title, used),
-                xml: sheetXml(rows, widthsFor(rows, section.columns.length))
+                headerRow: 1,
+                xml: sheetXml(rows, widths, { dataEnd, merges, title: section.title + " · " + report.scopeLabel, generated: report.generated })
             });
         });
 
@@ -665,7 +765,7 @@
                 content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets
                     .map((sheet, i) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)
-                    .join("")}</sheets></workbook>`
+                    .join("")}</sheets><definedNames>${sheets.map((sheet, i) => `<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${xmlEscape("'" + sheet.name.replaceAll("'", "''") + "'!$1:$" + sheet.headerRow)}</definedName>`).join("")}</definedNames></workbook>`
             },
             {
                 name: "xl/_rels/workbook.xml.rels",
@@ -677,7 +777,7 @@
             {
                 name: "xl/styles.xml",
                 content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="16"/><color rgb="FF0F5C75"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F5C75"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="16"/><color rgb="FF0642B0"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF526170"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0642B0"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="hair"><color rgb="FFDCE5EB"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
             },
             ...sheets.map((sheet, i) => ({
                 name: `xl/worksheets/sheet${i + 1}.xml`,

@@ -23,6 +23,7 @@
         return {total, present, absent: total - present, percent: total ? Math.round(present / total * 10000) / 100 : 0};
     }
     function aptitude(payload, defects = []) {
+        if (payload?.template === 'reliper-light-v1' && payload.reliper?.fatigue?.some((v,n) => typeof v === 'boolean' && (n < 5 ? !v : v))) return 'No apto';
         if (defects.some(d => !d.resolved_at) || payload?.items?.some(i => critical(i) && i.status === 'No conforme')) return 'No apto';
         if (!payload?.items?.length) return 'Sin inspección';
         return payload.items.some(i => i.status === 'No conforme') ? 'Con observaciones' : 'Apto';
@@ -37,7 +38,7 @@
                 const item = items.find(i => i.id === c.id);
                 if (!item || !['Conforme', 'No conforme', 'No aplica'].includes(item.status)) throw new Error('Responde cada componente.');
                 if (item.status !== 'Conforme') need(item.note, 'Describe la falla o justifica por qué no aplica.');
-                if (c.critical && item.status === 'No aplica') throw new Error('Los componentes críticos requieren verificación.');
+                if (critical(item) && item.status === 'No aplica') throw new Error('Los componentes críticos requieren verificación.');
             }
         } else if (kind === 'talk') {
             for (const key of ['date', 'time', 'topic', 'instructor', 'unit', 'area', 'content']) need(payload[key], 'Completa los datos de la charla, unidad, área y contenido.');

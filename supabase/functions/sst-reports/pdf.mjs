@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import {createReliperReport} from './reliper-pdf.mjs';
 
 const labels={tires:'Llantas y ruedas',brakes:'Frenos',lights:'Luces',windows:'Ventanas',mirrors:'Espejos',belts:'Cinturones',extinguisher:'Extintor',horn:'Bocina',fluids:'Fluidos y fugas',steering:'Dirección',reverse:'Alarma de retroceso',wipers:'Limpiaparabrisas',firstaid:'Botiquín y herramientas',other:'Otros'};
 const criticalIds=['tires','brakes','lights','mirrors','belts','extinguisher','horn','fluids','steering','reverse'];
@@ -15,6 +16,7 @@ export async function createMailTest(){
  return doc.save();
 }
 export async function createReport(version,defects=[],getFile=async()=>null){
+ if(version.kind==='inspection'&&version.payload.template==='reliper-light-v1')return createReliperReport(version,defects,getFile);
  const doc=await PDFDocument.create(),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
  doc.setTitle(version.kind==='inspection'?'Inspección de vehículos':'Charla de seguridad');doc.setAuthor('SST Control - Reliper');
  let page,y;const width=507;
