@@ -19,7 +19,7 @@
 .safety-danger { background:#fff1f0; border-color:#c13232; color:#842727; }
 .safety-warning { background:#fff7df; color:#785500; border-color:#c08a12; }
 .safety-page input,.safety-page select,.safety-page textarea,.safety-dialog input,.safety-dialog select,.safety-dialog textarea { padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card,#fff); color:var(--text); max-width:100%; min-width:0; font:inherit; }
-.safety-page input:not([type=checkbox]),.safety-page select,.safety-dialog input:not([type=checkbox]),.safety-dialog select { min-height:44px; }
+.safety-page input:not([type=checkbox]):not([type=radio]),.safety-page select,.safety-dialog input:not([type=checkbox]):not([type=radio]),.safety-dialog select { min-height:44px; }
 .safety-page input:focus-visible,.safety-page select:focus-visible,.safety-dialog :is(input,select,textarea,button,summary):focus-visible,.safety-table-wrap:focus-visible { outline:3px solid var(--primary); outline-offset:3px; }
 .safety-dialog :is(input,select,textarea):disabled { opacity:.65; cursor:not-allowed; }
 .safety-page .btn,.safety-dialog .btn { min-height:44px; }
@@ -60,7 +60,7 @@
 .safety-roster input[type=checkbox] { width:20px; height:20px; }
 .safety-roster label { display:inline; }
 .safety-dialog .safety-check { display:flex; align-items:center; gap:10px; min-height:44px; cursor:pointer; }
-.safety-check input[type=checkbox] { width:20px; height:20px; margin:0; flex:0 0 20px; accent-color:var(--primary); }
+.safety-check input:is([type=checkbox],[type=radio]) { width:20px; height:20px; margin:0; flex:0 0 20px; accent-color:var(--primary); }
 .safety-attendance>h3 { margin-bottom:8px; }
 .safety-roster-toolbar { margin-bottom:12px; padding:12px; background:var(--surface-soft,var(--background)); }
 .safety-roster-bulk { margin-bottom:12px; }
@@ -73,6 +73,11 @@
 .safety-person-heading p { margin-top:5px; line-height:1.6; }
 .safety-person-heading>.safety-chip { flex-shrink:0; }
 .safety-person-controls { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin:8px 0; }
+.safety-attendance-choices { display:flex; flex-wrap:wrap; gap:10px; }
+.safety-attendance-choices .safety-check { border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
+.safety-attendance-choices .safety-check:has(input:checked) { border-color:var(--primary); background:var(--primary-light); }
+.safety-roster-options { margin-bottom:12px; }
+.safety-roster-options>summary { min-height:44px; padding:12px 0; color:var(--primary); cursor:pointer; font-size:13px; font-weight:600; }
 .safety-person-evidence summary { min-height:40px; padding:10px 0; color:var(--primary); cursor:pointer; font-size:13px; font-weight:600; }
 .safety-person-evidence-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(200px,.55fr); gap:18px; padding-top:8px; }
 .safety-person-evidence-body .safety-signature { margin:8px 0; }

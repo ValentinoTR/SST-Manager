@@ -3546,6 +3546,8 @@ function renderBoardEpp() {
 
 /* ---------- Vencimiento de SCTR y Vida Ley ---------- */
 
+let boardInsuranceExpanded = false;
+
 const INSURANCE_BADGES = {
     ok:      "badge-green",
     due:     "badge-yellow",
@@ -3595,6 +3597,17 @@ function renderBoardInsurance() {
     const data =
         SSTMetrics.insuranceTable(dashboardState(), today());
 
+    const toggle = document.getElementById("boardInsuranceToggle");
+    if (toggle) {
+        toggle.hidden = data.rows.length <= 5;
+        toggle.textContent = boardInsuranceExpanded ? "Mostrar solo 5" : `Ver todos (${data.rows.length})`;
+        toggle.setAttribute("aria-expanded", String(boardInsuranceExpanded));
+        toggle.onclick = () => {
+            boardInsuranceExpanded = !boardInsuranceExpanded;
+            renderBoardInsurance();
+        };
+    }
+
     if (data.rows.length === 0) {
 
         setBoard(
@@ -3608,7 +3621,7 @@ function renderBoardInsurance() {
     const summary = data.summary;
 
     const rows =
-        data.rows.map(row => `
+        (boardInsuranceExpanded ? data.rows : data.rows.slice(0, 5)).map(row => `
 
             <tr>
                 <td>${boardWorkerCell(row.worker)}</td>
@@ -3644,6 +3657,8 @@ function renderBoardInsurance() {
                 <tbody>${rows}</tbody>
             </table>
         </div>
+
+        <p class="board-list-count" role="status">Mostrando ${boardInsuranceExpanded ? data.rows.length : Math.min(5, data.rows.length)} de ${data.rows.length} trabajadores. Los totales incluyen a todo el personal del filtro.</p>
 
     `);
 

@@ -18,8 +18,8 @@
     <script>try{document.documentElement.dataset.theme=localStorage.getItem("sst_ui_theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");}catch{}</script>
     <meta name="description" content="SST Control: colaboradores, prevención y seguimiento de seguridad y salud en el trabajo.">
     <link rel="stylesheet" href="styles.css?v=20261101-audit">
-    <link rel="stylesheet" href="workspace.css?v=20261101-audit">
-    <link rel="stylesheet" href="safety.css?v=20261101-audit">
+    <link rel="stylesheet" href="workspace.css?v=20261102-publicacion">
+    <link rel="stylesheet" href="safety.css?v=20261102-asistencia">
 
 </head>
 
@@ -505,6 +505,7 @@
                                 <p>Fecha en que vence cada seguro por colaborador.</p>
                             </div>
                             <div class="board-actions">
+                                <button class="btn btn-light btn-small" id="boardInsuranceToggle" type="button" aria-controls="boardInsuranceBody" aria-expanded="false" hidden>Ver todos</button>
                                 <button class="btn btn-primary btn-small" data-action="new-insurance">+ Seguro</button>
                             </div>
                         </div>
@@ -2115,7 +2116,7 @@
 <script src="workspace-core.js?v=20261101-audit"></script>
 <script src="metrics.js?v=20261101-audit"></script>
 <script src="reports.js?v=20261101-audit"></script>
-<script src="app.js?v=20261101-audit"></script>
+<script src="app.js?v=20261102-publicacion"></script>
 
 
 
@@ -2124,7 +2125,7 @@
 <script src="workspace.js?v=20261101-audit"></script>
 <script src="cloud.js?v=20261101-audit"></script>
 <script src="safety-core.js?v=20261101-audit"></script>
-<script type="module" src="safety.js?v=20261101-audit"></script>
+<script type="module" src="safety.js?v=20261102-asistencia"></script>
 <script>window.SSTCloud.start();</script>
 </body>
 
