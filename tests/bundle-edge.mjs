@@ -14,3 +14,6 @@ let setup=await readFile(new URL('../sst-gmail-setup/index.ts',root),'utf8');
 setup=setup.replace("import { digest, randomToken, encryptCredential } from '../_shared/gmail-credentials.mjs';",'');
 await mkdir('tmp',{recursive:true});await writeFile('tmp/sst-reports.ts',reliperData+'\n'+reliperPdf+'\n'+credentials+'\n'+pdf+'\n'+index);
 await writeFile('tmp/sst-gmail-setup.ts',credentials+'\n'+setup);
+let operations=await readFile(new URL('../ops-reports/index.ts',root),'utf8');
+operations=operations.replace("from '@supabase/supabase-js'","from 'npm:@supabase/supabase-js@2.118.0'").replace("import { createReport, createMailTest } from '../sst-reports/pdf.mjs';",'').replace("import { decryptCredential } from '../_shared/gmail-credentials.mjs';",'');
+await writeFile('tmp/ops-reports.ts',reliperData+'\n'+reliperPdf+'\n'+credentials+'\n'+pdf+'\n'+operations);
