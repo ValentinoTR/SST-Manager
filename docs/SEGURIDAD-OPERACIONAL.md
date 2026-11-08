@@ -22,6 +22,18 @@ Se reutilizan los formularios y reglas de safety.js, safety-core.js, reliper.mjs
 
 El destinatario inicial es seguridad@reliper.pe y el remitente educornejoperea28@gmail.com. Se conserva la autorización Gmail cifrada existente en el servidor, sin trasladarla al navegador. Ambas colas son independientes. Gmail debe mantener una autorización vigente; un consentimiento de Google en modo de prueba puede requerir renovación. No se declara un correo entregado por estar en cola: Enviado significa aceptación por el proveedor.
 
+La ruta administrativa POST /health de ops-reports exige exclusivamente el secreto de su planificador. Comprueba la autorización de Gmail sin enviar mensajes, reclamar trabajos ni devolver credenciales. Responde disponibilidad o indisponibilidad; no es un diagnóstico accesible desde el navegador.
+
+## Verificación del servidor · 7 de noviembre de 2026 (Lima)
+
+Se instaló la migración y se desplegó ops-reports en el proyecto correcto mediante la CLI oficial autorizada. Las nueve tablas nuevas tienen RLS, el bucket es privado, la vista utiliza security_invoker y el planificador separado está activo cada minuto. Ningún recurso nuevo admite lectura anónima ni borrado de registros por el usuario.
+
+Se probó el guardado real de personal, inspección RELIPER, corrección, bloqueo por falla crítica, charla con 20 convocados y 18 presentes, versiones y cola en una transacción completamente revertida. No se dejaron filas de prueba ni se enviaron correos. Todas las tablas operativas y evidencias nuevas quedaron vacías.
+
+Los diez controles de integridad (nueve tablas originales y el inventario de 31 archivos existentes) coinciden antes y después de la instalación. Las funciones originales permanecen en sus versiones anteriores. El asesor de seguridad no añadió avisos respecto de los tres preexistentes.
+
+El servicio desplegado devolvió HTTP 401 sin sesión y HTTP 403 con origen ajeno. La comprobación privada de Gmail y el procesamiento autorizado de la cola vacía respondieron HTTP 200. Se verificó autorización vigente, sin afirmar entrega de un reporte operacional que aún no existe.
+
 ## Vista previa y verificación
 
 npm run preview sirve /operaciones/ con autenticación real y /operaciones/__test__ con un simulador vacío. SST_PREVIEW_PORT permite elegir puerto. La ruta de prueba solo existe localmente, borra sus datos al recargar y no envía correos.

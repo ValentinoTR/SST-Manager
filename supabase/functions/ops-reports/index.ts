@@ -63,6 +63,15 @@ Deno.serve(async(req:Request)=>{
   // Scheduler secret is generated/stored inside PostgreSQL and never exposed to clients.
   let owner:string|null=null;
   const scheduler=await value(db.rpc('ops_is_report_worker',{candidate:bearer}));
+  // OPS_MAIL_HEALTH_START: authorization check only; never claim jobs or send mail.
+  if(new URL(req.url).pathname.endsWith('/health')){
+   if(!scheduler)return response({error:'Comprobación reservada al administrador del servidor.'},403);
+   try{
+    await gmailToken();
+    return response({status:'ready',mail_authorized:true});
+   }catch{return response({status:'not_ready',mail_authorized:false},503);}
+  }
+  // OPS_MAIL_HEALTH_END
   // Administrative smoke test: fixed recipient/content; no operational records created.
   if(new URL(req.url).pathname.endsWith('/test')){
    if(!scheduler)return response({error:'Prueba reservada al administrador del servidor.'},403);
