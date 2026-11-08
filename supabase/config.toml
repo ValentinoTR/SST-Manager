@@ -5,3 +5,7 @@ verify_jwt = false
 [functions.sst-gmail-setup]
 # One-use admin-issued ticket, state, HttpOnly cookie and PKCE protect OAuth.
 verify_jwt = false
+
+[functions.ops-reports]
+# Same user JWT and independent server scheduler checks as sst-reports.
+verify_jwt = false

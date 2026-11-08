@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
+import operationsWorkers from '../operaciones/workers-core.js';
 const source = await readFile(new URL('../cloud.js', import.meta.url), 'utf8');
 const copy = value => JSON.parse(JSON.stringify(value));
 const seed = name => ({ workers: [{ id: 'worker-1', name }], attendance: [], goals: { trainingMonthly: 0 } });
@@ -12,7 +13,7 @@ async function drain() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 function backend(rows = {}) {
     return { rows: new Map(Object.entries(rows).map(([id, payload]) => [id, { payload: copy(payload), updated_at: stamp }])), writes: [], reads: [], uploads: [], removals: [], active: 0, maxActive: 0, holdWrite: null, holdRead: null, failWrite: false };
 }
-function runtime(db, id = 'a', storage = new Map()) {
+function runtime(db, id = 'a', storage = new Map(), defaults = { workers: [], attendance: [], goals: { trainingMonthly: 0 } }) {
     const elements = new Map(), events = new Map(), timers = new Map(); let nextTimer = 1, authCallback, session = id ? owner(id) : null;
     const node = () => {
         const listeners = new Map(), values = new Set();
@@ -45,7 +46,7 @@ function runtime(db, id = 'a', storage = new Map()) {
     const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) };
     const document = { body, hidden: false, getElementById: id => elements.get(id) || null, createElement: node, querySelector: selector => selector === '.utility-actions' ? utility : null, querySelectorAll: () => [], addEventListener(type, fn) { events.set(type, fn); } };
     const window = { SST_SUPABASE_CONFIG: { url: 'https://example.test', publishableKey: 'public' }, supabase: { createClient: () => client }, addEventListener(type, fn) { events.set(type, fn); }, dispatchEvent() {} };
-    const ctx = vm.createContext({ window, document, localStorage, console, Blob, URL, Date, confirm: () => false, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, setTimeout(fn, delay) { const n = nextTimer++; timers.set(n, { fn, delay }); return n; }, clearTimeout(n) { timers.delete(n); }, STORAGE_KEY: 'sst_control_v2', initialState: { workers: [], attendance: [], goals: { trainingMonthly: 0 } }, state: seed('unowned'), SSTMetrics: { ensureCollections(saved, defaults) { return { ...copy(defaults), ...copy(saved) }; } }, renderAll() {}, refreshCurrentReport() {} });
+    const ctx = vm.createContext({ window, document, localStorage, console, Blob, URL, Date, confirm: () => false, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, setTimeout(fn, delay) { const n = nextTimer++; timers.set(n, { fn, delay }); return n; }, clearTimeout(n) { timers.delete(n); }, STORAGE_KEY: 'sst_control_v2', initialState: defaults, state: seed('unowned'), SSTMetrics: { ensureCollections(saved, defaults) { return { ...copy(defaults), ...copy(saved) }; } }, renderAll() {}, refreshCurrentReport() {} });
     vm.runInContext(source, ctx);
     return { api: window.SSTCloud, ctx, storage, elements, body, async start() { await window.SSTCloud.start(); await drain(); }, readState: () => copy(vm.runInContext('state', ctx)), auth(event, id) { session = id ? owner(id) : null; authCallback(event, session); }, async timers(delay) { const current = [...timers.entries()].filter(([, item]) => item.delay === delay); for (const [n, item] of current) { timers.delete(n); item.fn(); } await drain(); } };
 }
@@ -134,4 +135,19 @@ test('Eliminar registros conserva evidencia privada ante conflictos y cambio de 
  assert.equal(db.removals.length,0);assert.equal(db.rows.get('a').payload.medical[0].attachment.id,'file-1');
  assert.deepEqual(JSON.parse(two.storage.get('sst_control_v2:cloud:a')).unlinkedEvidence,['file-1']);
  two.auth('SIGNED_IN','b');await two.timers(0);assert.equal(db.removals.length,0);
+});
+
+
+test('Motor de sincronización con defaults mínimos conserva campos y rechaza una copia antigua', async () => {
+ const payload={...seed('Ana'),medical:[{id:'m1',attachment:'f1'}],insurance:[{id:'i1'}],futureModule:{original:true}};
+ payload.workers[0]={id:'worker-1',name:'Ana',dni:'00123456',role:'Operadora',area:'Taller',status:'Activo',license:'A-II'};
+ const db=backend({a:payload}),operations=runtime(db,'a',new Map(),{workers:[]}),manager=runtime(db);
+ await operations.start();await manager.start();assert.equal(db.writes.length,0,'abrir la nueva página no modifica la fila existente');
+ const next=operationsWorkers.prepare(operations.readState(),{...payload.workers[0],name:'Ana Corregida'},'worker-1','2026-11-07');
+ await operations.api.syncNow(next);
+ for(const key of ['medical','insurance','futureModule','attendance','goals'])assert.deepEqual(db.rows.get('a').payload[key],payload[key]);
+ assert.equal(db.rows.get('a').payload.workers[0].license,'A-II');
+ await assert.rejects(manager.api.syncNow({...payload,attendance:[{workerId:'worker-1',date:'2026-11-07',status:'Asistió'}]}),/otro dispositivo/);
+ assert.equal(db.rows.get('a').payload.workers[0].name,'Ana Corregida');
+ assert.equal(manager.api.getSyncState().conflict,true);
 });

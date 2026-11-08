@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#102b55">
+  <meta name="description" content="RELIPER: inspecciones de vehículos y charlas de seguridad en un espacio de trabajo dedicado.">
+  <title>RELIPER | Seguridad operacional</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('reliper_ops_theme')||'light'}catch{}</script>
+  <link rel="icon" href="../relieper.webp">
+  <link rel="stylesheet" href="../safety.css?v=20261102-asistencia">
+  <link rel="stylesheet" href="operaciones.css?v=20261107">
+</head>
+<body class="cloud-locked">
+  <a class="skip-link" href="#mainContent">Saltar al contenido</a>
+  <div class="operations-app">
+    <aside class="operations-sidebar" aria-label="Navegación de seguridad operacional">
+      <a class="operations-brand" href="./" aria-label="RELIPER Seguridad operacional, inicio">
+        <img src="../relieper.webp" alt="RELIPER" width="46" height="46">
+        <span><strong>RELIPER</strong><small>Seguridad operacional</small></span>
+      </a>
+      <p class="nav-caption">TU ESPACIO DE TRABAJO</p>
+      <nav class="menu" aria-label="Módulos"></nav>
+      <div class="operations-sidebar-note"><span class="note-line"></span><strong>Antes de empezar,<br>la seguridad primero.</strong><p>Verifica las condiciones del vehículo y prepara a tu equipo para la jornada.</p></div>
+      <a class="manager-link" href="../">Abrir SST-Manager <span aria-hidden="true">↗</span></a>
+    </aside>
+    <main class="operations-main" id="mainContent" tabindex="-1">
+      <header class="utility-bar">
+        <div class="operations-context"><span class="status-dot" aria-hidden="true"></span><span>CONTROL OPERACIONAL</span></div>
+        <div class="utility-actions"><button class="btn btn-light theme-toggle" id="operations-theme" type="button" aria-label="Activar modo oscuro" aria-pressed="false">◐ <span>Tema</span></button></div>
+      </header>
+      <div class="operations-content">
+        <header class="operations-heading">
+          <div><p class="eyebrow">SEGURIDAD EN CADA JORNADA</p><h1 id="pageTitle">Inspección de vehículos</h1><p id="pageSubtitle">Checklist, fallas críticas e historial del vehículo.</p></div>
+          <div class="operations-date"><span>HOY · LIMA</span><strong id="operations-date">—</strong></div>
+        </header>
+        <div class="operations-brief"><div><span class="brief-icon" aria-hidden="true">✓</span><span><strong>Revisa. Registra. Da seguimiento.</strong><small>Todo el control de inspecciones y charlas, en un solo lugar.</small></span></div><span class="personnel-count" id="operations-personnel">Acceso privado</span></div>
+        <p class="data-note">RELIPER · Inspección de vehículos y charlas de seguridad · Registros por cuenta.</p>
+      </div>
+    </main>
+  </div>
+  <div class="operations-toast" id="operations-toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="operations-worker" class="safety-dialog" aria-labelledby="operations-worker-title"></dialog>
+  <dialog id="operations-personnel-dialog" class="safety-dialog" aria-labelledby="operations-personnel-title"></dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
+  <script src="../supabase-config.js"></script>
+  <script src="client-scope.js?v=20261107"></script>
+  <script src="../metrics.js?v=20261101-audit"></script>
+  <script src="../safety-core.js?v=20261101-audit"></script>
+  <script src="workers-core.js?v=20261107"></script>
+  <script src="host.js?v=20261107"></script>
+  <script src="../cloud.js?v=20261101-audit"></script>
+  <script type="module" src="boot.mjs?v=20261107"></script>
+</body>
+</html>

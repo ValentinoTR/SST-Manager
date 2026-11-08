@@ -17,3 +17,4 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: node --check app.js && node --check cloud.js && node --check safety.js && node --check workspace.js && node --check workspace-core.js
+      - run: node --check operaciones/client-scope.js && node --check operaciones/host.js && node --check operaciones/workers-core.js && node --check operaciones/boot.mjs
